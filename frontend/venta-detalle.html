@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+  <title>Detalle venta - Las Gardenias</title>
+
+   
+  <link rel="stylesheet" href="./css/styles.css">
+  <link rel="icon" type="image/png" href="./assets/gardenia.png">
+</head>
+
+<body class="bg-zinc-950 text-white min-h-screen">
+
+  <main class="max-w-5xl mx-auto p-6">
+
+    <header class="flex items-center gap-4 mb-8">
+
+      <a
+        href="./ventas-historial.html"
+        class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm"
+      >
+        ← Historial
+      </a>
+
+      <div>
+        <h1 class="text-4xl font-black">
+          Detalle de venta
+        </h1>
+
+        <p
+          id="folioVenta"
+          class="text-zinc-400 mt-2"
+        >
+          Cargando...
+        </p>
+      </div>
+
+    </header>
+
+    <section
+      id="infoVenta"
+      class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8"
+    ></section>
+
+    <section class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+
+      <table class="w-full text-left">
+
+        <thead class="bg-zinc-800 text-zinc-300">
+
+          <tr>
+            <th class="p-3">Producto</th>
+            <th class="p-3">Cantidad</th>
+            <th class="p-3">Precio</th>
+            <th class="p-3">Subtotal</th>
+          </tr>
+
+        </thead>
+
+        <tbody
+          id="tablaDetalles"
+          class="divide-y divide-zinc-800"
+        ></tbody>
+
+      </table>
+
+      <section class="mt-8 bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+
+  <h2 class="text-2xl font-black mb-5">
+    Devolución
+  </h2>
+
+  <textarea
+    id="motivoDevolucion"
+    rows="4"
+    class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+    placeholder="Motivo de devolución..."
+  ></textarea>
+
+  <button
+    id="btnDevolver"
+    class="mt-5 w-full bg-red-500 hover:bg-red-400 text-black font-black py-4 rounded-xl text-xl"
+  >
+    Realizar devolución
+  </button>
+
+  <p
+    id="mensaje"
+    class="mt-5 text-sm text-zinc-400"
+  ></p>
+
+</section>
+
+
+
+    </section>
+
+  </main>
+
+  <script src="./js/venta-detalle.js"></script>
+
+</body>
+</html>

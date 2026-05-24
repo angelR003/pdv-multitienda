@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Usuarios - Las Gardenias</title>
+    <link rel="stylesheet" href="./css/styles.css">
+    <link rel="icon" type="image/png" href="./assets/gardenia.png" />
+  </head>
+
+  <body class="bg-zinc-950 text-white min-h-screen">
+    <main class="max-w-6xl mx-auto p-6">
+      <header class="flex items-center gap-4 mb-8">
+        <a
+          href="./dashboard.html"
+          class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm"
+        >
+          ← Menú
+        </a>
+
+        <div>
+          <h1 class="text-4xl font-black">Usuarios</h1>
+          <p class="text-zinc-400 mt-2">
+            Crear y consultar usuarios del sistema.
+          </p>
+        </div>
+      </header>
+
+      <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">Nombre</label>
+            <input
+              id="nombre"
+              type="text"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+              placeholder="Nombre completo..."
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">Usuario</label>
+            <input
+              id="username"
+              type="text"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+              placeholder="Ejemplo: cajero1"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">Contraseña</label>
+            <input
+              id="password"
+              type="password"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+              placeholder="Contraseña..."
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">Rol</label>
+            <select
+              id="rol"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+            >
+              <option value="empleado">Empleado</option>
+              <option value="administrador">Administrador</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">Sucursal Asignada</label>
+            <select
+              id="tiendaId"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+            >
+              <option value="1">LAS GARDENIAS</option>
+              <option value="2">LAS GARDENIAS 2</option>
+              <option value="3">LOS ANGELES</option>
+            </select>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          id="btnCrear"
+          class="mt-8 w-full bg-indigo-500 hover:bg-indigo-400 text-black font-black py-4 rounded-xl text-xl"
+        >
+          Crear usuario
+        </button>
+
+        <p id="mensaje" class="mt-5 text-sm text-zinc-400"></p>
+      </section>
+
+      <section
+        class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden"
+      >
+        <table class="w-full text-left">
+          <thead class="bg-zinc-800 text-zinc-300">
+            <tr>
+              <th class="p-3">Nombre</th>
+              <th class="p-3">Usuario</th>
+              <th class="p-3">Rol</th>
+              <th class="p-3">Tienda</th>
+              <th class="p-3">Estado</th>
+              <th class="p-3"></th>
+            </tr>
+          </thead>
+
+          <tbody id="tablaUsuarios" class="divide-y divide-zinc-800"></tbody>
+        </table>
+      </section>
+      <section class="mt-8 bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+  <div class="p-6 border-b border-zinc-800">
+    <h2 class="text-3xl font-black">Historial de ingresos</h2>
+    <p id="tituloAccesos" class="text-zinc-400 mt-2">Selecciona un usuario.</p>
+  </div>
+
+  <table class="w-full text-left">
+    <thead class="bg-zinc-800 text-zinc-300">
+      <tr>
+        <th class="p-3">Fecha y hora</th>
+        <th class="p-3">Tienda</th>
+      </tr>
+    </thead>
+
+    <tbody id="tablaAccesos" class="divide-y divide-zinc-800"></tbody>
+  </table>
+</section>
+    </main>
+
+    <script src="./js/usuarios.js"></script>
+  </body>
+</html>

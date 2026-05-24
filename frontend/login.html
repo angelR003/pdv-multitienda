@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <link rel="icon" type="image/x-icon" href="./assets/gardenia.png">
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login - PDV Las Gardenias</title>
+
+   <link rel="stylesheet" href="./css/styles.css">
+</head>
+
+<body class="bg-zinc-950 min-h-screen flex items-center justify-center text-white">
+
+  <div class="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+
+    <div class="mb-8 text-center">
+      <h1 class="text-4xl font-bold">PDV Las Gardenias</h1>
+      <p class="text-zinc-400 mt-2">
+        Iniciar sesión
+      </p>
+    </div>
+
+    <div class="space-y-5">
+
+      <div>
+        <label class="block text-sm text-zinc-400 mb-2">
+          Usuario
+        </label>
+
+        <input
+          id="username"
+          type="text"
+          class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+          placeholder="Usuario"
+        />
+      </div>
+
+      <div>
+        <label class="block text-sm text-zinc-400 mb-2">
+          Contraseña
+        </label>
+
+        <input
+          id="password"
+          type="password"
+          class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+          placeholder="Contraseña"
+        />
+      </div>
+
+      <button
+        id="btnLogin"
+        class="w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-xl text-lg"
+      >
+        Entrar
+      </button>
+
+      <p
+        id="mensaje"
+        class="text-center text-sm text-zinc-400"
+      ></p>
+
+    </div>
+
+  </div>
+
+  <script src="./js/login.js"></script>
+
+</body>
+</html>

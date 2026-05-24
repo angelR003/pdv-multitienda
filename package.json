@@ -1,0 +1,38 @@
+{
+  "name": "pdv-multitienda",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "electron": "electron .",
+    "build": "electron-builder",
+    "build:css": "tailwindcss -i ./frontend/css/input.css -o ./frontend/css/styles.css --minify"
+  },
+  "devDependencies": {
+    "electron": "^42.1.0",
+    "electron-builder": "^26.0.12",
+    "tailwindcss": "^3.4.17"
+  },
+  "build": {
+    "appId": "com.lasgardenias.pdv",
+    "productName": "Las Gardenias PDV",
+    "win": {
+      "target": "nsis"
+    },
+    "files": [
+      "**/*",
+      "backend/node_modules/**/*"
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "sqlite3": "^6.0.1"
+  }
+}

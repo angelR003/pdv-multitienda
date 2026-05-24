@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+  <title>Historial - Las Gardenias</title>
+
+   
+  <link rel="stylesheet" href="./css/styles.css">
+  <link rel="icon" type="image/png" href="./assets/gardenia.png">
+</head>
+
+<body class="bg-zinc-950 text-white min-h-screen">
+
+  <main class="max-w-7xl mx-auto p-6">
+
+    <header class="flex items-center gap-4 mb-8">
+
+      <a
+        href="./dashboard.html"
+        class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm"
+      >
+        ← Menú
+      </a>
+
+      <div>
+        <h1 class="text-4xl font-black">
+          Historial de ventas
+        </h1>
+
+        <p class="text-zinc-400 mt-2">
+          Ventas registradas en el sistema.
+        </p>
+      </div>
+
+    </header>
+
+    <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 mb-8">
+
+      <input
+        id="busqueda"
+        type="text"
+        placeholder="Buscar folio..."
+        class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+      />
+
+    </section>
+
+    <section class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+
+      <table class="w-full text-left">
+
+        <thead class="bg-zinc-800 text-zinc-300">
+
+          <tr>
+            <th class="p-3">Folio</th>
+            <th class="p-3">Total</th>
+            <th class="p-3">Pago</th>
+            <th class="p-3">Usuario</th>
+            <th class="p-3">Fecha</th>
+            <th class="p-3"></th>
+          </tr>
+
+        </thead>
+
+        <tbody
+          id="tablaVentas"
+          class="divide-y divide-zinc-800"
+        ></tbody>
+
+      </table>
+
+    </section>
+
+  </main>
+
+  <script src="./js/ventas-historial.js"></script>
+
+</body>
+</html>

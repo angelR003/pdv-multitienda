@@ -1,0 +1,23 @@
+# Dependencias
+node_modules/
+backend/node_modules/
+
+# Variables entorno
+.env
+backend/.env
+
+# Bases de datos
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Backups
+backups/
+
+# Builds
+dist/
+release/
+out/
+
+# Logs
+*.log

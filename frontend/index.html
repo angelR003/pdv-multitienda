@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <link rel="icon" type="image/x-icon" href="./assets/gardenia.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDV Las Gardenias</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body class="bg-zinc-950 text-white min-h-screen">
+    <main class="p-6 max-w-7xl mx-auto">
+      <header class="mb-6 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <a
+            href="./dashboard.html"
+            class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm"
+          >
+            ← Menu
+          </a>
+
+          <div>
+            <h1 class="text-3xl font-bold">PDV Las Gardenias</h1>
+
+            <p class="text-zinc-400">Venta rápida por código de barras</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <div class="text-right">
+            <p id="usuarioNombre" class="font-semibold"></p>
+
+            <p id="usuarioRol" class="text-sm text-zinc-400"></p>
+          </div>
+
+          <button
+            type="button"
+            id="btnLogout"
+            class="bg-red-500 hover:bg-red-400 text-black font-bold px-4 py-2 rounded-xl"
+          >
+            Salir
+          </button>
+        </div>
+      </header>
+
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div
+          class="lg:col-span-2 bg-zinc-900 rounded-2xl p-5 border border-zinc-800"
+        >
+          <label class="block text-sm text-zinc-400 mb-2"
+            >Escanear / escribir código</label
+          >
+          <input
+            id="codigoInput"
+            type="text"
+            autofocus
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-4 text-2xl outline-none focus:border-green-500"
+            placeholder="Código de barras..."
+          />
+
+          <div class="mt-6 overflow-hidden rounded-xl border border-zinc-800">
+            <table class="w-full text-left">
+              <thead class="bg-zinc-800 text-zinc-300">
+                <tr>
+                  <th class="p-3">Producto</th>
+                  <th class="p-3">Cant.</th>
+                  <th class="p-3">Precio</th>
+                  <th class="p-3">Subtotal</th>
+                  <th class="p-3"></th>
+                </tr>
+              </thead>
+              <tbody id="carritoTabla" class="divide-y divide-zinc-800"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="bg-zinc-900 rounded-2xl p-5 border border-zinc-800 h-fit">
+          <h2 class="text-xl font-semibold mb-4">Resumen</h2>
+
+          <div class="flex justify-between text-zinc-400 mb-2">
+            <span>Productos</span>
+            <span id="totalProductos">0</span>
+          </div>
+
+          <div
+            class="flex justify-between items-center border-t border-zinc-800 pt-4 mt-4"
+          >
+            <span class="text-zinc-400">Total</span>
+
+            <span id="totalVenta" class="text-4xl font-bold text-green-400"
+              >$0.00</span
+            >
+          </div>
+          <label class="block text-sm text-zinc-400 mt-6 mb-2">
+            Pagó con
+          </label>
+
+          <input
+            id="pagoCon"
+            type="number"
+            step="0.50"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+            placeholder="Opcional..."
+          />
+
+          <div class="flex justify-between items-center mt-3">
+            <span class="text-zinc-400">Cambio</span>
+            <span id="cambioVenta" class="text-2xl font-bold text-yellow-300"
+              >$0.00</span
+            >
+          </div>
+
+          <label class="block text-sm text-zinc-400 mt-6 mb-2"
+            >Método de pago</label
+          >
+          <select
+            id="metodoPago"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+          >
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="fiado">Fiado</option>
+            <option value="mixto">Mixto</option>
+          </select>
+<div id="grupoClienteFiado" class="hidden mt-4">
+  <label class="block text-sm text-zinc-400 mb-2">
+    Cliente fiado
+  </label>
+
+  <select
+    id="clienteFiado"
+    class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+  >
+    <option value="">Selecciona cliente...</option>
+    <option value="nuevo">+ Crear nuevo deudor</option>
+  </select>
+
+  <div
+    id="formNuevoDeudorVenta"
+    class="hidden mt-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4"
+  >
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <input
+        id="nuevoDeudorNombre"
+        class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+        placeholder="Nombre completo *"
+      />
+
+      <input
+        id="nuevoDeudorApodo"
+        class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+        placeholder="Apodo"
+      />
+
+      <input
+        id="nuevoDeudorTelefono"
+        class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+        placeholder="Teléfono"
+      />
+
+      <input
+        id="nuevoDeudorLimite"
+        type="number"
+        class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+        placeholder="Límite de crédito"
+      />
+    </div>
+
+    <button
+      type="button"
+      id="btnGuardarNuevoDeudorVenta"
+      class="mt-4 w-full bg-lime-500 hover:bg-lime-400 text-black rounded-xl py-3 font-black"
+    >
+      Guardar deudor
+    </button>
+  </div>
+</div>
+          <button
+            type="button"
+            id="btnProductoManual"
+            class="w-full mt-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3"
+          >
+            Agregar producto por peso
+          </button>
+          <button
+  type="button"
+  id="btnProductoSuelto"
+  class="w-full mt-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3"
+>
+  Agregar producto suelto
+</button>
+
+          <button
+            type="button"
+            id="btnCobrar"
+            class="w-full mt-6 bg-green-500 hover:bg-green-400 text-black font-bold rounded-xl py-4 text-xl"
+          >
+            Cobrar
+          </button>
+
+          <button
+            type="button"
+            id="btnLimpiar"
+            class="w-full mt-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3"
+          >
+            Limpiar venta
+          </button>
+
+          <p id="mensaje" class="mt-4 text-sm text-zinc-400"></p>
+        </aside>
+      </section>
+    </main>
+    <div
+      id="modalManual"
+      class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4"
+    >
+      <div
+        class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6"
+      >
+        <h2 class="text-2xl font-bold mb-4">Producto por peso</h2>
+
+        <label class="block text-sm text-zinc-400 mb-2"> Producto </label>
+
+        <select
+          id="manualProducto"
+          class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 mb-4"
+        ></select>
+
+        <label class="block text-sm text-zinc-400 mb-2">
+          Cantidad / peso
+        </label>
+
+        <input
+          id="manualCantidad"
+          type="number"
+          step="0.001"
+          class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 mb-4"
+          placeholder="Ejemplo: 250 gramos"
+        />
+
+        <div class="flex gap-3">
+          <button
+            type="button"
+            id="btnAgregarManual"
+            class="flex-1 bg-green-500 hover:bg-green-400 text-black font-bold rounded-xl py-3"
+          >
+            Agregar
+          </button>
+
+          <button
+            type="button"
+            id="btnCerrarModal"
+            class="flex-1 bg-zinc-800 hover:bg-zinc-700 rounded-xl py-3"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./js/venta.js"></script>
+  </body>
+</html>

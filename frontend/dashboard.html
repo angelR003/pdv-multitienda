@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/x-icon" href="./assets/gardenia.png" />
+
+    <title>Menu Principal - PDV Las gardenias</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+
+  </head>
+
+  <body
+    class="bg-[radial-gradient(circle_at_top_left,#14532d_0,#09090b_32%,#09090b_100%)] text-white min-h-screen"
+  >
+    <main class="max-w-7xl mx-auto p-6">
+      <header
+        class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-10"
+      >
+        <div>
+          <div
+            class="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/30 text-green-300 px-4 py-2 rounded-full text-sm mb-4"
+          >
+            <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+            Sistema activo
+          </div>
+
+          <h1 class="text-5xl lg:text-6xl font-black tracking-tight">
+            PDV Las Gardenias
+          </h1>
+
+          <p class="text-zinc-300 mt-3 text-lg">
+            Control de ventas, inventario y operación diaria.
+          </p>
+        </div>
+
+        <div
+          class="bg-zinc-900/80 backdrop-blur border border-zinc-800 rounded-3xl p-5 min-w-72 shadow-2xl"
+        >
+          <p class="text-zinc-400 text-sm">Sesión iniciada</p>
+
+          <p id="usuarioNombre" class="font-bold text-xl mt-1"></p>
+
+          <p id="usuarioRol" class="text-green-400 text-sm mt-1"></p>
+        </div>
+      </header>
+
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <a
+          href="./index.html"
+          class="lg:col-span-2 group bg-zinc-900/90 border border-zinc-800 hover:border-green-400 rounded-[2rem] p-8 shadow-2xl transition hover:-translate-y-1"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div
+                class="w-16 h-16 rounded-2xl bg-green-500 text-black flex items-center justify-center text-4xl mb-6 group-hover:scale-110 transition"
+              >
+                $
+              </div>
+
+              <h2 class="text-4xl font-black">Ventas</h2>
+
+              <p class="text-zinc-400 mt-3 max-w-xl">
+                Escanea productos, agrega artículos por peso y registra ventas
+                rápidamente.
+              </p>
+            </div>
+
+            <span
+              class="text-green-400 text-sm bg-green-500/10 border border-green-500/30 px-3 py-1 rounded-full"
+            >
+              Principal
+            </span>
+          </div>
+        </a>
+
+        <a
+          href="./productos.html"
+          class="group bg-zinc-900/90 border border-zinc-800 hover:border-blue-400 rounded-[2rem] p-8 shadow-2xl transition hover:-translate-y-1"
+        >
+          <div
+            class="w-16 h-16 rounded-2xl bg-blue-500 text-black flex items-center justify-center text-4xl mb-6 group-hover:scale-110 transition"
+          >
+            +
+          </div>
+
+          <h2 class="text-3xl font-black">Productos</h2>
+
+          <p class="text-zinc-400 mt-3">
+            Da de alta productos con código, por peso o manuales.
+          </p>
+        </a>
+      </section>
+
+      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+
+
+          <a
+            href="./inventario.html"
+            class="bg-zinc-900/70 border border-zinc-800 hover:border-yellow-400 rounded-3xl p-6 transition hover:-translate-y-1"
+          >
+            <div
+              class="w-12 h-12 rounded-xl bg-yellow-500/20 text-yellow-300 flex items-center justify-center text-2xl mb-5"
+            >
+              #
+            </div>
+
+            <h2 class="text-2xl font-bold">Inventario</h2>
+
+            <p class="text-zinc-400 mt-2">
+              Existencias por tienda, faltantes y sobrantes.
+            </p>
+
+            <p class="text-xs text-yellow-300 mt-5">Disponible</p>
+          </a>
+        </div>
+        <a
+          href="./entradas.html"
+          class="bg-zinc-900/70 border border-zinc-800 hover:border-purple-400 rounded-3xl p-6 transition hover:-translate-y-1"
+        >
+          <div
+            class="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-2xl mb-5"
+          >
+            ↓
+          </div>
+
+          <h2 class="text-2xl font-bold">Entradas</h2>
+
+          <p class="text-zinc-400 mt-2">
+            Registra mercancía nueva y actualiza inventario.
+          </p>
+
+          <p class="text-xs text-purple-300 mt-5">Disponible</p>
+        </a>
+  <a
+  href="./movimientos-caja.html"
+  class="bg-zinc-900/70 border border-zinc-800 hover:border-emerald-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div
+    class="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-2xl mb-5"
+  >
+    $
+  </div>
+
+  <h2 class="text-2xl font-bold">
+    Caja
+  </h2>
+
+  <p class="text-zinc-400 mt-2">
+    Entradas, retiros y movimientos de efectivo.
+  </p>
+
+  <p class="text-xs text-emerald-300 mt-5">
+    Disponible
+  </p>
+
+  <a
+  href="./cortes.html"
+  class="bg-zinc-900/70 border border-zinc-800 hover:border-cyan-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div
+    class="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-2xl mb-5"
+  >
+    #
+  </div>
+
+  <h2 class="text-2xl font-bold">
+    Cortes
+  </h2>
+
+  <p class="text-zinc-400 mt-2">
+    Cierre y arqueo de caja.
+  </p>
+
+  <p class="text-xs text-cyan-300 mt-5">
+    Disponible
+  </p>
+</a>
+
+<a
+  href="./ajustes-inventario.html"
+  class="bg-zinc-900/70 border border-zinc-800 hover:border-orange-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div
+    class="w-12 h-12 rounded-xl bg-orange-500/20 text-orange-300 flex items-center justify-center text-2xl mb-5"
+  >
+    !
+  </div>
+
+  <h2 class="text-2xl font-bold">
+    Ajustes
+  </h2>
+
+  <p class="text-zinc-400 mt-2">
+    Correcciones y diferencias de inventario.
+  </p>
+
+  <p class="text-xs text-orange-300 mt-5">
+    Disponible
+  </p>
+</a>
+
+<a
+  href="./ventas-historial.html"
+  class="bg-zinc-900/70 border border-zinc-800 hover:border-pink-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div
+    class="w-12 h-12 rounded-xl bg-pink-500/20 text-pink-300 flex items-center justify-center text-2xl mb-5"
+  >
+    #
+  </div>
+
+  <h2 class="text-2xl font-bold">
+    Historial
+  </h2>
+
+  <p class="text-zinc-400 mt-2">
+    Ventas registradas y detalles.
+  </p>
+
+  <p class="text-xs text-pink-300 mt-5">
+    Disponible
+  </p>
+</a>
+
+<a
+  href="./importes.html"
+  class="bg-zinc-900/70 border border-zinc-800 hover:border-lime-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div class="w-12 h-12 rounded-xl bg-lime-500/20 text-lime-300 flex items-center justify-center text-2xl mb-5">
+    ↻
+  </div>
+
+  <h2 class="text-2xl font-bold">Importes</h2>
+
+  <p class="text-zinc-400 mt-2">
+    Envases, importes y retornables.
+  </p>
+
+  <p class="text-xs text-lime-300 mt-5">Disponible</p>
+</a>
+
+<a
+  id="cardUsuarios"
+  href="./usuarios.html"
+  class="bg-zinc-900/70 border border-zinc-800 hover:border-indigo-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div
+    class="w-12 h-12 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-2xl mb-5"
+  >
+    @
+  </div>
+
+  <h2 class="text-2xl font-bold">
+    Usuarios
+  </h2>
+
+  <p class="text-zinc-400 mt-2">
+    Crear empleados y administradores.
+  </p>
+
+  <p class="text-xs text-indigo-300 mt-5">
+    Solo admin
+  </p>
+</a>
+
+<a
+  href="./fiados.html"
+  class="bg-zinc-900/70 border border-zinc-800 hover:border-red-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div class="w-12 h-12 rounded-xl bg-red-500/20 text-red-300 flex items-center justify-center text-2xl mb-5">
+    $
+  </div>
+
+  <h2 class="text-2xl font-bold">Fiados</h2>
+
+  <p class="text-zinc-400 mt-2">
+    Clientes, deudas y abonos.
+  </p>
+
+  <p class="text-xs text-red-300 mt-5">Disponible</p>
+</a>
+
+
+</a>
+        <button
+          type="button"
+          id="btnLogout"
+          class="bg-red-500 hover:bg-red-400 text-black font-black rounded-3xl p-6 text-left shadow-2xl transition hover:-translate-y-1"
+        >
+          <div
+            class="w-12 h-12 rounded-xl bg-black/20 flex items-center justify-center text-2xl mb-5"
+          >
+            ×
+          </div>
+
+          <h2 class="text-2xl font-black">Salir</h2>
+
+          <p class="mt-2">Cerrar sesión.</p>
+        </button>
+      </section>
+
+      <footer class="mt-10 text-zinc-500 text-sm">
+        PDV Las Gardenias · Versión 0.8 en desarrollo
+      </footer>
+    </main>
+
+    <script src="./js/dashboard.js"></script>
+  </body>
+</html>
