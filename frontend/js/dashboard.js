@@ -70,16 +70,22 @@ function inicializarActualizador() {
     btnDescargarUpdate.disabled = true;
     updateProgress.textContent = "Iniciando descarga...";
 
-    btnRevisarUpdate?.addEventListener("click", async () => {
+btnRevisarUpdate?.addEventListener("click", async () => {
+  alert("Click detectado en botón revisar actualización");
+
   updateBox.classList.remove("hidden");
-  updateProgress.textContent = "Buscando actualización...";
+
+  if (!window.actualizador) {
+    updateProgress.textContent =
+      "window.actualizador NO existe. El preload.js no está cargando.";
+    return;
+  }
+
+  updateProgress.textContent = "window.actualizador existe. Buscando actualización...";
 
   const respuesta = await window.actualizador.revisar();
 
-  if (!respuesta.ok) {
-    updateProgress.textContent =
-      respuesta.mensaje || "No se pudo revisar actualización.";
-  }
+  updateProgress.textContent = JSON.stringify(respuesta);
 });
 
 setTimeout(() => {

@@ -18,6 +18,7 @@ function createWindow() {
   });
 
   win.loadURL("http://localhost:3000/login.html");
+  win.webContents.openDevTools();
 }
 
 function iniciarBackend() {
