@@ -96,6 +96,9 @@ btnLimpiar.addEventListener("click", (event) => {
   mostrarMensaje("Venta limpiada.");
 });
 
+pagoCon.addEventListener("input", calcularCambio);
+pagoCon.addEventListener("change", calcularCambio);
+
 btnProductoManual.addEventListener("click", async () => {
   modoModalProducto = "peso";
   modalManual.classList.remove("hidden");
@@ -421,11 +424,12 @@ function cerrarSesion() {
 }
 
 function calcularCambio() {
-  const total = carrito.reduce((sum, item) => sum + item.subtotal, 0);
-  const pagado = Number(pagoCon.value);
+  const total = carrito.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+  const pagado = Number(pagoCon.value || 0);
 
   if (!pagado || pagado <= 0) {
     cambioVenta.textContent = "$0.00";
+    cambioVenta.className = "text-2xl font-bold text-yellow-300";
     return;
   }
 
@@ -439,7 +443,6 @@ function calcularCambio() {
     cambioVenta.className = "text-2xl font-bold text-yellow-300";
   }
 }
-
 async function cargarClientesFiado() {
   try {
     const response = await fetch(`${API_URL}/fiados/clientes`, {

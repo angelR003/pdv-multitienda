@@ -38,6 +38,7 @@ function inicializarActualizador() {
   const updateProgress = document.getElementById("updateProgress");
   const btnDescargarUpdate = document.getElementById("btnDescargarUpdate");
   const btnInstalarUpdate = document.getElementById("btnInstalarUpdate");
+  const btnRevisarUpdate = document.getElementById("btnRevisarUpdate");
 
   if (!updateBox || !updateVersion || !updateProgress || !btnDescargarUpdate || !btnInstalarUpdate) {
     return;
@@ -69,6 +70,23 @@ function inicializarActualizador() {
     btnDescargarUpdate.disabled = true;
     updateProgress.textContent = "Iniciando descarga...";
 
+    btnRevisarUpdate?.addEventListener("click", async () => {
+  updateBox.classList.remove("hidden");
+  updateProgress.textContent = "Buscando actualización...";
+
+  const respuesta = await window.actualizador.revisar();
+
+  if (!respuesta.ok) {
+    updateProgress.textContent =
+      respuesta.mensaje || "No se pudo revisar actualización.";
+  }
+});
+
+setTimeout(() => {
+  window.actualizador.revisar().catch((error) => {
+    console.log("No se pudo revisar actualización:", error);
+  });
+}, 3000);
     const respuesta = await window.actualizador.descargar();
 
     if (!respuesta.ok) {
