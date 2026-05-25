@@ -113,3 +113,49 @@ setTimeout(() => {
 }
 
 document.addEventListener("DOMContentLoaded", inicializarActualizador);
+
+window.probarActualizadorManual = async function () {
+  alert("Click detectado");
+
+  const updateBox = document.getElementById("updateBox");
+  const updateProgress = document.getElementById("updateProgress");
+
+  if (updateBox) {
+    updateBox.classList.remove("hidden");
+  }
+
+  if (!updateProgress) {
+    alert("No existe updateProgress");
+    return;
+  }
+
+  if (!window.actualizador) {
+    updateProgress.textContent = "window.actualizador NO existe. Falló preload.js.";
+    return;
+  }
+
+  updateProgress.textContent = "window.actualizador existe. Buscando actualización...";
+
+  const respuesta = await window.actualizador.revisar();
+
+ if (!respuesta.ok) {
+  updateProgress.textContent =
+    respuesta.mensaje || "No se pudo revisar actualización.";
+  return;
+}
+
+const disponible = respuesta.resultado?.isUpdateAvailable;
+const version = respuesta.resultado?.versionInfo?.version || "";
+
+if (disponible) {
+  updateBox.classList.remove("hidden");
+  updateVersion.textContent = `Versión nueva disponible: ${version}`;
+  updateProgress.textContent =
+    "Puedes descargarla cuando no haya clientes esperando.";
+} else {
+  updateBox.classList.remove("hidden");
+  updateVersion.textContent = "";
+  updateProgress.textContent =
+    "Tu sistema ya está actualizado.";
+}
+};
