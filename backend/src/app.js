@@ -6,6 +6,7 @@ const { crearBackup } = require("./utils/backup");
 
 require("dotenv").config();
 require("./database/connection");
+require("./database/run-migrations");
 
 const productosRoutes = require("./routes/productos.routes");
 const ventasRoutes = require("./routes/ventas.routes");

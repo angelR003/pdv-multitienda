@@ -218,44 +218,48 @@ const actualizarProducto = (req, res) => {
     factor_conversion
   } = req.body;
 
-  const query = `
-    UPDATE productos
-    SET
-      tipo_producto = ?,
-      codigo_barras = ?,
-      nombre = ?,
-      categoria = ?,
-      marca = ?,
-      presentacion = ?,
-      unidad = ?,
-      precio_global = ?,
-      costo_compra = ?,
-      requiere_caducidad = ?
-    WHERE id = ?
-  `;
+const query = `
+  UPDATE productos
+  SET
+    tipo_producto = ?,
+    codigo_barras = ?,
+    nombre = ?,
+    categoria = ?,
+    marca = ?,
+    presentacion = ?,
+    unidad = ?,
+    precio_global = ?,
+    costo_compra = ?,
+    requiere_caducidad = ?,
+    es_derivado = ?,
+    producto_padre_id = ?,
+    factor_conversion = ?
+  WHERE id = ?
+`;
 
   db.run(
     query,
-    [
-      tipo_producto,
-      codigo_barras || null,
-      nombre,
-      categoria,
-      marca,
-      presentacion,
-      unidad,
-      precio_global,
-      costo_compra,
-      requiere_caducidad ? 1 : 0,
-      es_derivado || 0,
-      producto_padre_id || null,
-      factor_conversion || 1,
-      id,
-    ],
+   [
+  tipo_producto,
+  codigo_barras || null,
+  nombre,
+  categoria,
+  marca,
+  presentacion,
+  unidad,
+  precio_global,
+  costo_compra,
+  requiere_caducidad ? 1 : 0,
+  es_derivado || 0,
+  producto_padre_id || null,
+  factor_conversion || 1,
+  id,
+],
     function (error) {
       if (error) {
         return res.status(500).json({
           error: "Error al actualizar producto",
+          detalle: error.message
         });
       }
 
