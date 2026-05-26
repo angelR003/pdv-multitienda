@@ -128,7 +128,7 @@ async function cargarMovimientos() {
         </td>
 
         <td class="p-3 text-zinc-500 text-sm">
-          ${item.fecha_movimiento}
+          ${formatearFechaLocal(item.fecha_movimiento)}
         </td>
       `;
 
@@ -150,4 +150,29 @@ function limpiarFormulario() {
 
 function mostrarMensaje(texto) {
   mensaje.textContent = texto;
+}
+
+function formatearFechaLocal(fecha) {
+  if (!fecha) return "-";
+
+  const fechaTexto = String(fecha);
+
+  const fechaISO = fechaTexto.includes("T")
+    ? fechaTexto
+    : fechaTexto.replace(" ", "T") + "Z";
+
+  const date = new Date(fechaISO);
+
+  if (isNaN(date.getTime())) return fechaTexto;
+
+  return date.toLocaleString("es-MX", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
 }
