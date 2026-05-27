@@ -18,7 +18,8 @@
     "db:migrar-importes-cliente": "node src/database/migrar-importes-cliente.js",
     "db:fix-envases": "node src/database/fix-envases-importes.js",
     "db:migrar-productos-derivados": "node src/database/migrar-productos-derivados.js",
-    "db:migrar-total-devuelto": "node src/database/migrar-total-devuelto.js"
+    "db:migrar-total-devuelto": "node src/database/migrar-total-devuelto.js",
+    "db:migrar-importes-cliente-fiado": "node src/database/migrar-importes-cliente-fiado.js"
     
   },
   "build": {

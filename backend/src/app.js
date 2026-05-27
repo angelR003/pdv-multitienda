@@ -7,6 +7,7 @@ const { crearBackup } = require("./utils/backup");
 require("dotenv").config();
 require("./database/connection");
 require("./database/run-migrations");
+require("./database/migrar-importes-cliente-fiado");
 
 const productosRoutes = require("./routes/productos.routes");
 const ventasRoutes = require("./routes/ventas.routes");
