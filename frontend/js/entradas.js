@@ -41,19 +41,7 @@ async function cargarProductos() {
 
     productos = await response.json();
 
-    producto.innerHTML = "";
-
-    productos.forEach((item) => {
-      const option = document.createElement("option");
-
-      option.value = item.id;
-      option.dataset.unidad = item.unidad;
-
-      option.textContent = `${item.nombre} - ${item.presentacion || item.unidad}`;
-
-      producto.appendChild(option);
-    });
-
+    renderSelectProductos(productos);
     actualizarCampoCantidad();
 
   } catch (error) {
@@ -148,3 +136,36 @@ function limpiarFormulario() {
 function mostrarMensaje(texto) {
   mensaje.textContent = texto;
 }
+
+
+function renderSelectProductos(lista) {
+  producto.innerHTML = "";
+
+  lista.forEach((item) => {
+    const option = document.createElement("option");
+
+    option.value = item.id;
+    option.dataset.unidad = item.unidad;
+
+    option.textContent = `${item.nombre} - ${item.presentacion || item.unidad}`;
+
+    producto.appendChild(option);
+  });
+
+  actualizarCampoCantidad();
+}
+
+const buscarProductoEntrada = document.getElementById("buscarProductoEntrada");
+
+buscarProductoEntrada?.addEventListener("input", () => {
+  const texto = buscarProductoEntrada.value.toLowerCase().trim();
+
+  const filtrados = productos.filter((p) =>
+    String(p.nombre || "").toLowerCase().includes(texto) ||
+    String(p.codigo_barras || "").toLowerCase().includes(texto) ||
+    String(p.categoria || "").toLowerCase().includes(texto) ||
+    String(p.marca || "").toLowerCase().includes(texto)
+  );
+
+  renderSelectProductos(filtrados);
+});

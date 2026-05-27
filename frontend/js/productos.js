@@ -27,6 +27,7 @@ const productoPadre = document.getElementById("productoPadre");
 const unidadesPorPadre = document.getElementById("unidadesPorPadre");
 
 let productoEditandoId = null;
+let productos = [];
 
 btnGuardar.addEventListener("click", async () => {
   await guardarProducto();
@@ -49,7 +50,7 @@ async function guardarProducto() {
     tipo_producto: tipoProducto.value,
     codigo_barras: codigoBarras.value.trim() || null,
     nombre: nombre.value.trim(),
-    categoria: categoria,
+    categoria: categoria.value,
     marca: marca.value.trim(),
     presentacion: presentacion.value.trim(),
     unidad: unidad.value.trim(),
@@ -171,74 +172,61 @@ async function cargarProductos() {
       },
     });
 
-    const productos = await response.json();
-
-    tablaProductos.innerHTML = "";
-
-    productos.forEach((producto) => {
-      const tr = document.createElement("tr");
-
-      tr.innerHTML = `
-        <td class="p-3">
-          <div class="font-semibold">
-            ${producto.nombre}
-          </div>
-
-          <div class="text-xs text-zinc-500">
-            ${producto.codigo_barras || "Sin código"}
-          </div>
-        </td>
-
-        <td class="p-3 text-zinc-300">
-          ${producto.tipo_producto}
-        </td>
-
-        <td class="p-3 text-green-400 font-bold">
-          $${Number(producto.precio_global).toFixed(2)}
-        </td>
-
-        <td class="p-3 text-zinc-300">
-          $${Number(producto.costo_compra).toFixed(2)}
-        </td>
-
-        <td class="p-3 text-zinc-300">
-          ${producto.unidad}
-        </td>
-
-      <td>
-  ${
-    producto.activo
-      ? `
-      <button
-  class="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-xl font-bold mr-2"
-  onclick="editarProducto(${producto.id})"
->
-  Editar
-</button>
-        <button
-          class="bg-red-500 hover:bg-red-400 text-black px-4 py-2 rounded-xl font-bold"
-          onclick="desactivarProducto(${producto.id})"
-        >
-          Desactivar
-        </button>
-      `
-      : `
-        <button
-          class="bg-green-500 hover:bg-green-400 text-black px-4 py-2 rounded-xl font-bold"
-          onclick="activarProducto(${producto.id})"
-        >
-          Activar
-        </button>
-      `
-  }
-</td>
-      `;
-
-      tablaProductos.appendChild(tr);
-    });
+  productos = await response.json();
+  renderProductos(productos);
   } catch (error) {
     mostrarMensaje("Error al cargar productos.");
   }
+}
+
+function renderProductos(lista) {
+  tablaProductos.innerHTML = "";
+
+  lista.forEach((producto) => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td class="p-3">
+        <div class="font-semibold">${producto.nombre}</div>
+        <div class="text-xs text-zinc-500">
+          ${producto.codigo_barras || "Sin código"}
+        </div>
+      </td>
+
+      <td class="p-3 text-zinc-300">${producto.tipo_producto}</td>
+
+      <td class="p-3 text-green-400 font-bold">
+        $${Number(producto.precio_global).toFixed(2)}
+      </td>
+
+      <td class="p-3 text-zinc-300">
+        $${Number(producto.costo_compra).toFixed(2)}
+      </td>
+
+      <td class="p-3 text-zinc-300">${producto.unidad}</td>
+
+      <td>
+        ${
+          producto.activo
+            ? `
+              <button class="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-xl font-bold mr-2" onclick="editarProducto(${producto.id})">
+                Editar
+              </button>
+              <button class="bg-red-500 hover:bg-red-400 text-black px-4 py-2 rounded-xl font-bold" onclick="desactivarProducto(${producto.id})">
+                Desactivar
+              </button>
+            `
+            : `
+              <button class="bg-green-500 hover:bg-green-400 text-black px-4 py-2 rounded-xl font-bold" onclick="activarProducto(${producto.id})">
+                Activar
+              </button>
+            `
+        }
+      </td>
+    `;
+
+    tablaProductos.appendChild(tr);
+  });
 }
 
 async function editarProducto(id) {
@@ -344,3 +332,19 @@ async function cargarProductosPadre() {
     mostrarMensaje("Error al cargar productos padre.");
   }
 }
+
+const buscarProducto = document.getElementById("buscarProducto");
+
+buscarProducto?.addEventListener("input", () => {
+  const texto = buscarProducto.value.toLowerCase().trim();
+
+  const filtrados = productos.filter((p) =>
+    String(p.nombre || "").toLowerCase().includes(texto) ||
+    String(p.codigo_barras || "").toLowerCase().includes(texto) ||
+    String(p.categoria || "").toLowerCase().includes(texto) ||
+    String(p.marca || "").toLowerCase().includes(texto) ||
+    String(p.presentacion || "").toLowerCase().includes(texto)
+  );
+
+  renderProductos(filtrados);
+});

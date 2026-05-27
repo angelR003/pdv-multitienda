@@ -124,6 +124,41 @@
 
   </main>
 
+  <div
+  id="modalDevolverEnvase"
+  class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+>
+  <div class="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-700 p-6 shadow-2xl">
+    <h2 class="text-2xl font-black mb-2">Recibir envases</h2>
+
+    <p id="textoMaximoEnvases" class="text-zinc-400 mb-4"></p>
+
+<input
+  id="cantidadDevolverEnvase"
+  type="number"
+  min="1"
+  class="w-full rounded-xl border border-zinc-700 px-4 py-3 placeholder-zinc-500"
+  style="background:#09090b; color:#ffffff;"
+  placeholder="Cantidad de envases"
+/>
+    <div class="flex gap-3 mt-5">
+      <button
+        id="btnCancelarDevolucionEnvase"
+        class="flex-1 rounded-xl bg-zinc-700 px-4 py-3 font-bold text-white hover:bg-zinc-600"
+      >
+        Cancelar
+      </button>
+
+      <button
+        id="btnConfirmarDevolucionEnvase"
+        class="flex-1 rounded-xl bg-lime-500 px-4 py-3 font-bold text-black hover:bg-lime-400"
+      >
+        Confirmar
+      </button>
+    </div>
+  </div>
+</div>
+
   <script src="./js/importes.js"></script>
 </body>
 </html>

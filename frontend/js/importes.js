@@ -23,9 +23,15 @@ const btnRegistrar = document.getElementById("btnRegistrar");
 const mensaje = document.getElementById("mensaje");
 const tablaImportes = document.getElementById("tablaImportes");
 const contenedorEnvases = document.getElementById("contenedorEnvases");
+const modalDevolverEnvase = document.getElementById("modalDevolverEnvase");
+const cantidadDevolverEnvase = document.getElementById("cantidadDevolverEnvase");
+const textoMaximoEnvases = document.getElementById("textoMaximoEnvases");
+const btnCancelarDevolucionEnvase = document.getElementById("btnCancelarDevolucionEnvase");
+const btnConfirmarDevolucionEnvase = document.getElementById("btnConfirmarDevolucionEnvase");
 
+let devolucionEnvasePendiente = null;
 let tiposEnvase = [];
-
+let devolucionEnProceso = false;
 let clientesFiado = [];
 
 clienteFiado.addEventListener("change", () => {
@@ -188,11 +194,50 @@ async function cargarImportes() {
 }
 
 async function devolverEnvase(id, maximo) {
-  const cantidad = Number(
-    prompt(`¿Cuántos envases regresó? Máximo: ${maximo}`),
-  );
+  devolucionEnvasePendiente = {
+    id,
+    maximo: Number(maximo),
+  };
 
-  if (!cantidad || cantidad <= 0) return;
+  textoMaximoEnvases.textContent = `Máximo permitido: ${maximo}`;
+  cantidadDevolverEnvase.value = "";
+  cantidadDevolverEnvase.max = maximo;
+
+  modalDevolverEnvase.classList.remove("hidden");
+
+  setTimeout(() => {
+    cantidadDevolverEnvase.focus();
+  }, 100);
+}
+
+btnCancelarDevolucionEnvase?.addEventListener("click", () => {
+  if (devolucionEnProceso) return;
+
+  modalDevolverEnvase.classList.add("hidden");
+  devolucionEnvasePendiente = null;
+  cantidadDevolverEnvase.value = "";
+});
+
+btnConfirmarDevolucionEnvase?.addEventListener("click", async () => {
+  if (devolucionEnProceso) return;
+  if (!devolucionEnvasePendiente) return;
+
+  const cantidad = Number(cantidadDevolverEnvase.value);
+  const { id, maximo } = devolucionEnvasePendiente;
+
+  if (!cantidad || cantidad <= 0) {
+    mostrarMensaje("Ingresa una cantidad válida.");
+    return;
+  }
+
+  if (cantidad > maximo) {
+    mostrarMensaje(`No puedes recibir más de ${maximo} envases.`);
+    return;
+  }
+
+  devolucionEnProceso = true;
+  btnConfirmarDevolucionEnvase.disabled = true;
+  btnConfirmarDevolucionEnvase.textContent = "Procesando...";
 
   try {
     const response = await fetch(`${API_URL}/importes/${id}/devolver`, {
@@ -212,11 +257,22 @@ async function devolverEnvase(id, maximo) {
     }
 
     mostrarMensaje(data.mensaje || "Envases recibidos correctamente.");
-    cargarImportes();
+
+    modalDevolverEnvase.classList.add("hidden");
+    devolucionEnvasePendiente = null;
+    cantidadDevolverEnvase.value = "";
+
+    await cargarImportes();
+    await cargarInventarioEnvases();
   } catch (error) {
+    console.error("ERROR RECIBIR ENVASE:", error);
     mostrarMensaje("Error al conectar.");
+  } finally {
+    devolucionEnProceso = false;
+    btnConfirmarDevolucionEnvase.disabled = false;
+    btnConfirmarDevolucionEnvase.textContent = "Confirmar";
   }
-}
+});
 
 async function cargarInventarioEnvases() {
   try {
