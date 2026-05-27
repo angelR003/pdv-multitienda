@@ -13,6 +13,7 @@ const obtenerTiposEnvase = (req, res) => {
       if (error) {
         return res.status(500).json({
           error: "Error al obtener tipos de envase",
+          detalle: error.message
         });
       }
 
@@ -102,6 +103,7 @@ const registrarImporte = (req, res) => {
           if (error) {
             return res.status(500).json({
               error: "Error al registrar importe",
+              detalle: error.message
             });
           }
 
@@ -136,6 +138,7 @@ const registrarImporte = (req, res) => {
                 if (error) {
                   return res.status(500).json({
                     error: "Error al registrar movimiento de caja",
+                    detalle: error.message
                   });
                 }
 
@@ -164,6 +167,7 @@ const registrarImporte = (req, res) => {
                 if (error) {
                   return res.status(500).json({
                     error: "Error al actualizar contador de envases",
+                    detalle: error.message
                   });
                 }
 
@@ -215,6 +219,7 @@ const obtenerImportes = (req, res) => {
     if (error) {
       return res.status(500).json({
         error: "Error al obtener importes",
+        detalle: error.message
       });
     }
 
@@ -281,6 +286,7 @@ const devolverImporte = (req, res) => {
           if (error) {
             return res.status(500).json({
               error: "Error al actualizar importe",
+              detalle: error.message
             });
           }
 
@@ -367,6 +373,7 @@ const obtenerInventarioEnvases = (req, res) => {
     if (error) {
       return res.status(500).json({
         error: "Error al obtener inventario de envases",
+        detalle: error.message
       });
     }
 
