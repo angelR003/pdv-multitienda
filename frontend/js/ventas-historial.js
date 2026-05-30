@@ -40,45 +40,60 @@ async function cargarVentas() {
 function renderVentas() {
   const texto = busqueda.value.toLowerCase().trim();
 
-  const filtradas = ventas.filter((venta) =>
-    venta.folio.toLowerCase().includes(texto)
+const filtradas = ventas.filter((venta) => {
+  const estadoTexto = obtenerTextoEstado(venta.estado).toLowerCase();
+
+  return (
+    venta.folio.toLowerCase().includes(texto) ||
+    String(venta.usuario || "").toLowerCase().includes(texto) ||
+    String(venta.metodo_pago || "").toLowerCase().includes(texto) ||
+    estadoTexto.includes(texto)
   );
+});
 
   tablaVentas.innerHTML = "";
 
   filtradas.forEach((venta) => {
     const tr = document.createElement("tr");
+    const textoEstado = obtenerTextoEstado(venta.estado);
+    const claseEstado = obtenerClaseEstado(venta.estado);
 
-    tr.innerHTML = `
-      <td class="p-3 font-semibold">
-        ${venta.folio}
-      </td>
+tr.innerHTML = `
+  <td class="p-3 font-semibold">
+    ${venta.folio}
+  </td>
 
-      <td class="p-3 text-green-400 font-bold">
-        $${Number(venta.total).toFixed(2)}
-      </td>
+  <td class="p-3 text-green-400 font-bold">
+    $${Number(venta.total).toFixed(2)}
+  </td>
 
-      <td class="p-3">
-        ${venta.metodo_pago}
-      </td>
+  <td class="p-3">
+    ${venta.metodo_pago}
+  </td>
 
-      <td class="p-3 text-zinc-400">
-        ${venta.usuario}
-      </td>
+  <td class="p-3 text-zinc-400">
+    ${venta.usuario}
+  </td>
 
-      <td class="p-3 text-zinc-500 text-sm">
-        ${formatearFechaLocal(venta.fecha_venta)}
-      </td>
+  <td class="p-3">
+    <span class="inline-flex px-3 py-1 rounded-full text-xs font-black ${claseEstado}">
+      ${textoEstado}
+    </span>
+  </td>
 
-      <td class="p-3">
-        <button
-          onclick="verDetalle(${venta.id})"
-          class="bg-pink-500 hover:bg-pink-400 text-black px-4 py-2 rounded-xl font-bold"
-        >
-          Ver detalle
-        </button>
-      </td>
-    `;
+  <td class="p-3 text-zinc-500 text-sm">
+    ${formatearFechaLocal(venta.fecha_venta)}
+  </td>
+
+  <td class="p-3">
+    <button
+      onclick="verDetalle(${venta.id})"
+      class="bg-pink-500 hover:bg-pink-400 text-black px-4 py-2 rounded-xl font-bold"
+    >
+      Ver detalle
+    </button>
+  </td>
+`;
 
     tablaVentas.appendChild(tr);
   });
@@ -99,4 +114,36 @@ function formatearFechaLocal(fecha) {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function obtenerTextoEstado(estado) {
+  if (estado === "devuelta_total") {
+    return "Devuelta total";
+  }
+
+  if (estado === "devuelta_parcial") {
+    return "Devuelta parcial";
+  }
+
+  if (estado === "cancelada") {
+    return "Cancelada";
+  }
+
+  return "Completada";
+}
+
+function obtenerClaseEstado(estado) {
+  if (estado === "devuelta_total") {
+    return "bg-red-500/10 text-red-400 border border-red-500/30";
+  }
+
+  if (estado === "devuelta_parcial") {
+    return "bg-yellow-500/10 text-yellow-300 border border-yellow-500/30";
+  }
+
+  if (estado === "cancelada") {
+    return "bg-zinc-500/10 text-zinc-400 border border-zinc-500/30";
+  }
+
+  return "bg-green-500/10 text-green-400 border border-green-500/30";
 }

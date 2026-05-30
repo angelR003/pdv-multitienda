@@ -31,11 +31,12 @@ const btnDevolver = document.getElementById("btnDevolver");
 
 const mensaje = document.getElementById("mensaje");
 
-cargarDetalleVenta();
+inicializarPantalla();
 
-btnDevolver.addEventListener("click", async () => {
-  await realizarDevolucion();
-});
+async function inicializarPantalla() {
+  await cargarDetalleVenta();
+  await cargarHistorialDevoluciones();
+}
 
 async function cargarDetalleVenta() {
   try {
@@ -48,6 +49,8 @@ async function cargarDetalleVenta() {
     const data = await response.json();
 
     renderVenta(data.venta);
+
+    console.log("CARGANDO DETALLE VENTA", new Date().toLocaleTimeString());
 
     renderDetalles(data.detalles);
   } catch (error) {
@@ -100,31 +103,117 @@ function renderVenta(venta) {
     </div>
   `;
 }
-
 function renderDetalles(detalles) {
   tablaDetalles.innerHTML = "";
-
+  console.log("DETALLES RECIBIDOS:", detalles);
   detalles.forEach((detalle) => {
     const tr = document.createElement("tr");
 
-    tr.innerHTML = `
-      <td class="p-3 font-semibold">
-        ${detalle.producto}
-      </td>
+    const cantidadVendida = Number(detalle.cantidad || 0);
+    const cantidadDevuelta = Number(detalle.cantidad_devuelta || 0);
+    const cantidadRestante = Number(detalle.cantidad_restante_devolucion || 0);
 
-      <td class="p-3">
-        ${detalle.cantidad} ${detalle.unidad}
-      </td>
 
-      <td class="p-3">
-        $${Number(detalle.precio_unitario).toFixed(2)}
-      </td>
+    const tienePromocion = Number(detalle.promocion_id || 0) > 0;
+    const descuentoPromocion = Number(detalle.descuento_promocion || 0);
+    const precioOriginal = Number(detalle.precio_unitario_original || detalle.precio_unitario || 0);
+    const precioFinal = Number(detalle.precio_unitario_final || detalle.precio_unitario || 0);
 
-      <td class="p-3 text-green-400 font-bold">
-        $${Number(detalle.subtotal).toFixed(2)}
-      </td>
-    `;
+    const precioUnitario = Number(detalle.precio_unitario || 0);
+    const subtotalOriginal = Number(detalle.subtotal || 0);
 
+    const devueltoCompleto = cantidadRestante <= 0;
+
+tr.innerHTML = `
+  <td class="p-3 font-semibold">
+    <div>${detalle.producto_nombre || "Producto sin nombre"}</div>
+
+    ${
+      tienePromocion
+        ? `
+          <div class="text-xs text-cyan-300 font-bold mt-1">
+            Promo: ${detalle.promocion_cantidad_requerida} por $${Number(detalle.promocion_precio || 0).toFixed(2)}
+          </div>
+        `
+        : ""
+    }
+  </td>
+
+  <td class="p-3">
+    <div>
+      <strong>Vendido:</strong> ${cantidadVendida} ${detalle.unidad || ""}
+    </div>
+
+    <div class="text-xs text-red-400">
+      <strong>Devuelto:</strong> ${cantidadDevuelta} ${detalle.unidad || ""}
+    </div>
+
+    <div class="text-xs ${devueltoCompleto ? "text-red-400" : "text-green-400"}">
+      <strong>Resta:</strong> ${cantidadRestante} ${detalle.unidad || ""}
+    </div>
+  </td>
+
+  <td class="p-3">
+    ${
+      tienePromocion
+        ? `
+          <div class="line-through text-zinc-500">
+            $${precioOriginal.toFixed(2)}
+          </div>
+
+          <div class="text-cyan-300 font-bold">
+            $${precioFinal.toFixed(2)}
+          </div>
+        `
+        : `$${precioFinal.toFixed(2)}`
+    }
+  </td>
+
+  <td class="p-3 font-bold ${tienePromocion ? "text-cyan-300" : "text-green-400"}">
+    $${subtotalOriginal.toFixed(2)}
+
+    ${
+      tienePromocion
+        ? `
+          <div class="text-xs text-zinc-400 font-normal">
+            Ahorro: $${descuentoPromocion.toFixed(2)}
+          </div>
+        `
+        : ""
+    }
+  </td>
+
+  <td class="p-3">
+    ${
+      devueltoCompleto
+        ? `<span class="text-red-400 font-bold">Devuelto completo</span>`
+        : `
+          <div class="flex items-center gap-2">
+            <input
+              id="devolver-${detalle.id}"
+              type="number"
+              min="1"
+              max="${cantidadRestante}"
+              class="w-20 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-white"
+              placeholder="Cant."
+            />
+
+            <button
+              onclick="devolverRenglon(
+                ${detalle.id},
+                ${detalle.producto_id},
+                ${cantidadRestante},
+                ${precioFinal}
+              )"
+              class="bg-red-500 hover:bg-red-400 text-black px-4 py-2 rounded-xl font-bold"
+            >
+              Devolver
+            </button>
+          </div>
+        `
+    }
+  </td>
+`;
     tablaDetalles.appendChild(tr);
   });
 }
@@ -163,7 +252,6 @@ async function realizarDevolucion() {
       return;
     }
 
-    motivoDevolucion.value = "";
     mostrarMensaje("Devolución realizada correctamente.");
 
     btnDevolver.disabled = true;
@@ -206,3 +294,176 @@ function formatearFechaLocal(fecha) {
     hour12: false
   });
 }
+
+async function cargarHistorialDevoluciones() {
+  try {
+    const response = await fetch(`${API_URL}/devoluciones/venta/${ventaId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return;
+    }
+
+    renderizarHistorialDevoluciones(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function devolverRenglon(
+  detalleId,
+  productoId,
+  cantidadMaxima,
+  precioUnitario
+) {
+  const input = document.getElementById(`devolver-${detalleId}`);
+
+  const cantidad = Number(input.value);
+
+  if (!cantidad || cantidad <= 0) {
+    mostrarMensaje("Ingresa una cantidad válida.");
+    return;
+  }
+
+  if (cantidad > cantidadMaxima) {
+    mostrarMensaje(`No puedes devolver más de ${cantidadMaxima}.`);
+    return;
+  }
+
+  const motivo = prompt("Motivo de la devolución:");
+
+  if (!motivo || !motivo.trim()) {
+    mostrarMensaje("El motivo es obligatorio.");
+    return;
+  }
+
+  const confirmar = confirm(
+    `¿Seguro que quieres devolver ${cantidad} pieza(s)?`
+  );
+
+  if (!confirmar) return;
+
+  try {
+    const response = await fetch(
+      `${API_URL}/devoluciones/renglon`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          venta_id: Number(ventaId),
+          venta_detalle_id: detalleId,
+          producto_id: productoId,
+          tienda_id: tiendaId,
+          usuario_id: usuario.id,
+          cantidad,
+          precio_unitario: precioUnitario,
+          motivo: motivo.trim(),
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      mostrarMensaje(data.error || "Error al devolver producto.");
+      return;
+    }
+
+    mostrarMensaje("Producto devuelto correctamente.");
+
+    await cargarDetalleVenta();
+    await cargarHistorialDevoluciones();
+
+
+
+  } catch (error) {
+    console.error(error);
+    mostrarMensaje("Error al conectar.");
+  }
+}
+
+
+function renderizarHistorialDevoluciones(devoluciones) {
+  const contenedor = document.getElementById("historialDevoluciones");
+
+  if (!contenedor) return;
+
+  if (!devoluciones || devoluciones.length === 0) {
+    contenedor.innerHTML = `
+      <div class="text-sm text-zinc-400 px-3 py-4">
+        Esta venta no tiene devoluciones registradas.
+      </div>
+    `;
+    return;
+  }
+
+  contenedor.innerHTML = `
+    <div class="p-4 space-y-3">
+      ${devoluciones.map((dev) => {
+        const fecha = dev.fecha_devolucion
+          ? formatearFechaLocal(dev.fecha_devolucion)
+          : "Sin fecha";
+
+        return `
+          <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+            <div class="flex items-start justify-between gap-4 mb-3">
+              <div>
+                <p class="font-black text-white">
+                  ${dev.producto_nombre || dev.producto || "Producto sin nombre"}
+                </p>
+
+                <p class="text-xs text-zinc-400 mt-1">
+                  ${fecha}
+                </p>
+              </div>
+
+              <div class="text-right">
+                <p class="text-green-400 font-black">
+                  $${Number(dev.monto_devuelto || 0).toFixed(2)}
+                </p>
+
+                <p class="text-xs text-zinc-400">
+                  Monto devuelto
+                </p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div class="bg-zinc-900 rounded-xl p-3">
+                <p class="text-zinc-400 text-xs">Cantidad</p>
+                <p class="font-bold">
+                  ${dev.cantidad} ${dev.unidad || ""}
+                </p>
+              </div>
+
+              <div class="bg-zinc-900 rounded-xl p-3">
+                <p class="text-zinc-400 text-xs">Usuario</p>
+                <p class="font-bold">
+                  ${dev.usuario_nombre || "No disponible"}
+                </p>
+              </div>
+
+              <div class="bg-zinc-900 rounded-xl p-3">
+                <p class="text-zinc-400 text-xs">Motivo</p>
+                <p class="font-bold text-red-300">
+                  ${dev.motivo || "Sin motivo"}
+                </p>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+

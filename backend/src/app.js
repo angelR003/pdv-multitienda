@@ -8,6 +8,8 @@ require("dotenv").config();
 require("./database/connection");
 require("./database/run-migrations");
 require("./database/migrar-importes-cliente-fiado");
+require("./database/migrar-promociones");
+require("./database/migrar-venta-detalles-promociones");
 
 const productosRoutes = require("./routes/productos.routes");
 const ventasRoutes = require("./routes/ventas.routes");
@@ -23,6 +25,7 @@ const backupsRoutes = require("./routes/backups.routes");
 const usuariosRoutes = require("./routes/usuarios.routes");
 const importesRoutes = require("./routes/importes.routes");
 const fiadosRoutes = require("./routes/fiados.routes");
+const promocionesRoutes = require("./routes/promociones.routes");
 
 const app = express();
 
@@ -44,6 +47,7 @@ app.use("/api/backups", backupsRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/importes", importesRoutes);
 app.use("/api/fiados", fiadosRoutes);
+app.use("/api/promociones", promocionesRoutes);
 
 app.get("/", (req, res) => {
   res.json({

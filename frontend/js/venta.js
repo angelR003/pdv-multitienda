@@ -6,15 +6,12 @@ document.addEventListener("submit", (event) => {
 
 const token = localStorage.getItem("token");
 const usuario = JSON.parse(localStorage.getItem("usuario"));
-const tiendaId =
-  Number(localStorage.getItem("tienda_id"));
+const tiendaId = Number(localStorage.getItem("tienda_id"));
 
-const tiendaNombre =
-  localStorage.getItem("tienda_nombre");
+const tiendaNombre = localStorage.getItem("tienda_nombre");
 
 if (!tiendaId) {
-  window.location.href =
-    "./config-terminal.html";
+  window.location.href = "./config-terminal.html";
 }
 const esAdmin = usuario.rol === "administrador";
 
@@ -48,24 +45,23 @@ const btnCerrarModal = document.getElementById("btnCerrarModal");
 const grupoClienteFiado = document.getElementById("grupoClienteFiado");
 const clienteFiado = document.getElementById("clienteFiado");
 const formNuevoDeudorVenta = document.getElementById("formNuevoDeudorVenta");
-const btnGuardarNuevoDeudorVenta = document.getElementById("btnGuardarNuevoDeudorVenta");
+const btnGuardarNuevoDeudorVenta = document.getElementById(
+  "btnGuardarNuevoDeudorVenta",
+);
 const nuevoDeudorNombre = document.getElementById("nuevoDeudorNombre");
 const nuevoDeudorApodo = document.getElementById("nuevoDeudorApodo");
 const nuevoDeudorTelefono = document.getElementById("nuevoDeudorTelefono");
 const nuevoDeudorLimite = document.getElementById("nuevoDeudorLimite");
 const btnProductoSuelto = document.getElementById("btnProductoSuelto");
 
-
 let clientesFiado = [];
 let carrito = [];
 let modoModalProducto = "peso";
-
+let promocionesActivas = [];
 const usuarioId = usuario.id;
 
 usuarioNombre.textContent = usuario.nombre;
 usuarioRol.textContent = `${usuario.rol} • ${usuario.tienda}`;
-
-
 
 btnLogout.addEventListener("click", cerrarSesion);
 
@@ -121,7 +117,6 @@ metodoPago.addEventListener("change", () => {
     grupoClienteFiado.classList.remove("hidden");
 
     cargarClientesFiado();
-
   } else {
     grupoClienteFiado.classList.add("hidden");
     clienteFiado.value = "";
@@ -145,9 +140,8 @@ btnProductoSuelto.addEventListener("click", async () => {
   await cargarProductosManuales("suelto");
 });
 
-
-
 btnGuardarNuevoDeudorVenta.addEventListener("click", crearDeudorDesdeVenta);
+cargarPromocionesActivas();
 
 async function buscarProductoPorCodigo(codigo) {
   try {
@@ -157,7 +151,7 @@ async function buscarProductoPorCodigo(codigo) {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      }
+      },
     );
 
     const data = await response.json();
@@ -221,7 +215,6 @@ async function cargarProductosManuales(modo = "peso") {
   }
 }
 
-
 function agregarProductoManual() {
   const option = manualProducto.selectedOptions[0];
 
@@ -250,15 +243,20 @@ function agregarProductoManual() {
       ? redondearAMedioPeso(cantidad * precio)
       : cantidad * precio;
 
-  carrito.push({
-    producto_id,
-    nombre,
-    cantidad,
-    precio_unitario: precio,
-    subtotal,
-  });
+carrito.push({
+  producto_id,
+  nombre,
+  cantidad,
+  precio_unitario: precio,
+  precio_unitario_original: precio,
+  subtotal,
+  promocion_aplicada: false,
+  texto_promocion: "",
+  descuento_promocion: 0,
+});
 
-  renderCarrito();
+recalcularCarrito();
+renderCarrito();
 
   mostrarMensaje(`${nombre} agregado.`);
 
@@ -277,17 +275,23 @@ function agregarAlCarrito(producto) {
 
   if (existente) {
     existente.cantidad += 1;
-    existente.subtotal = existente.cantidad * existente.precio_unitario;
   } else {
+    const precio = Number(producto.precio_aplicable || producto.precio_global);
+
     carrito.push({
       producto_id: producto.id,
       nombre: producto.nombre,
       cantidad: 1,
-      precio_unitario: producto.precio_aplicable || producto.precio_global,
-      subtotal: producto.precio_aplicable || producto.precio_global,
+      precio_unitario: precio,
+      precio_unitario_original: precio,
+      subtotal: precio,
+      promocion_aplicada: false,
+      texto_promocion: "",
+      descuento_promocion: 0,
     });
   }
 
+  recalcularCarrito();
   renderCarrito();
 }
 
@@ -298,15 +302,64 @@ function renderCarrito() {
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
-      <td class="p-3">${item.nombre}</td>
-      <td class="p-3">${item.cantidad}</td>
-      <td class="p-3">$${item.precio_unitario.toFixed(2)}</td>
-      <td class="p-3">$${item.subtotal.toFixed(2)}</td>
-      <td class="p-3 text-right">
-        <button class="text-red-400 hover:text-red-300" onclick="eliminarItem(${item.producto_id})">
-          Quitar
-        </button>
-      </td>
+<td class="p-3">
+  <div class="font-semibold">${item.nombre}</div>
+  ${
+    item.promocion_aplicada
+      ? `<div class="text-xs text-cyan-300 font-bold mt-1">
+          Promo: ${item.texto_promocion}
+        </div>`
+      : ""
+  }
+</td>
+
+<td class="p-3">
+  ${item.cantidad}
+</td>
+
+<td class="p-3">
+  ${
+    item.promocion_aplicada
+      ? `
+        <div class="line-through text-zinc-500">
+          $${Number(item.precio_unitario_original).toFixed(2)}
+        </div>
+        <div class="text-cyan-300 font-bold">
+          $${Number(item.precio_unitario).toFixed(2)}
+        </div>
+      `
+      : `$${Number(item.precio_unitario).toFixed(2)}`
+  }
+</td>
+
+<td class="p-3">
+  <div class="font-bold ${item.promocion_aplicada ? "text-cyan-300" : "text-green-400"}">
+    $${Number(item.subtotal).toFixed(2)}
+  </div>
+
+  ${
+    item.promocion_aplicada
+      ? `<div class="text-xs text-zinc-400">
+          Ahorro: $${Number(item.descuento_promocion || 0).toFixed(2)}
+        </div>`
+      : ""
+  }
+</td>
+ <td class="p-3 text-right whitespace-nowrap">
+  <button
+    onclick="quitarUno(${item.producto_id})"
+    class="bg-yellow-500 hover:bg-yellow-400 text-black px-3 py-1 rounded-lg font-bold mr-2"
+  >
+    -1
+  </button>
+
+  <button
+    onclick="eliminarItem(${item.producto_id})"
+    class="bg-red-500 hover:bg-red-400 text-black px-3 py-1 rounded-lg font-bold"
+  >
+    Quitar
+  </button>
+</td>
     `;
 
     carritoTabla.appendChild(tr);
@@ -321,9 +374,12 @@ function renderCarrito() {
   calcularCambio();
 }
 
+
+
 function eliminarItem(productoId) {
-  carrito = carrito.filter((item) => item.producto_id !== productoId);
-  renderCarrito();
+carrito = carrito.filter((item) => item.producto_id !== productoId);
+recalcularCarrito();
+renderCarrito();
 }
 
 async function cobrarVenta() {
@@ -332,56 +388,54 @@ async function cobrarVenta() {
     return;
   }
 
-const body = {
-  tienda_id: tiendaId,
-  usuario_id: usuarioId,
-  metodo_pago: metodoPago.value,
+  const body = {
+    tienda_id: tiendaId,
+    usuario_id: usuarioId,
+    metodo_pago: metodoPago.value,
 
-  cliente_fiado_id:
-    metodoPago.value === "fiado"
-      ? Number(clienteFiado.value)
-      : null,
+    cliente_fiado_id:
+      metodoPago.value === "fiado" ? Number(clienteFiado.value) : null,
 
-  productos: carrito.map((item) => ({
-    producto_id: item.producto_id,
-    cantidad: item.cantidad,
-  })),
-};
+    productos: carrito.map((item) => ({
+      producto_id: item.producto_id,
+      cantidad: item.cantidad,
+    })),
+  };
 
   try {
     if (metodoPago.value === "fiado" && !clienteFiado.value) {
-  mostrarMensaje("Selecciona el cliente para fiado.");
-  return;
-}
-if (metodoPago.value === "fiado") {
-  const cliente = clientesFiado.find(
-    (c) => Number(c.id) === Number(clienteFiado.value)
-  );
-
-  if (cliente) {
-    const deudaActual = Number(cliente.deuda_total || 0);
-    const limite = Number(cliente.limite_credito || 0);
-    const totalVenta = carrito.reduce(
-      (total, item) => total + Number(item.subtotal || 0),
-      0
-    );
-
-    if (limite > 0 && deudaActual + totalVenta > limite) {
-      const continuar = confirm(
-        `ATENCIÓN: este fiado superará el límite del cliente.\n\n` +
-        `Cliente: ${cliente.nombre_completo}\n` +
-        `Deuda actual: $${deudaActual.toFixed(2)}\n` +
-        `Venta actual: $${totalVenta.toFixed(2)}\n` +
-        `Límite: $${limite.toFixed(2)}\n\n` +
-        `¿Deseas aceptar y continuar?`
+      mostrarMensaje("Selecciona el cliente para fiado.");
+      return;
+    }
+    if (metodoPago.value === "fiado") {
+      const cliente = clientesFiado.find(
+        (c) => Number(c.id) === Number(clienteFiado.value),
       );
 
-      if (!continuar) {
-        return;
+      if (cliente) {
+        const deudaActual = Number(cliente.deuda_total || 0);
+        const limite = Number(cliente.limite_credito || 0);
+        const totalVenta = carrito.reduce(
+          (total, item) => total + Number(item.subtotal || 0),
+          0,
+        );
+
+        if (limite > 0 && deudaActual + totalVenta > limite) {
+          const continuar = confirm(
+            `ATENCIÓN: este fiado superará el límite del cliente.\n\n` +
+              `Cliente: ${cliente.nombre_completo}\n` +
+              `Deuda actual: $${deudaActual.toFixed(2)}\n` +
+              `Venta actual: $${totalVenta.toFixed(2)}\n` +
+              `Límite: $${limite.toFixed(2)}\n\n` +
+              `¿Deseas aceptar y continuar?`,
+          );
+
+          if (!continuar) {
+            return;
+          }
+        }
       }
     }
-  }
-}
     const response = await fetch(`${API_URL}/ventas`, {
       method: "POST",
       headers: {
@@ -424,7 +478,10 @@ function cerrarSesion() {
 }
 
 function calcularCambio() {
-  const total = carrito.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+  const total = carrito.reduce(
+    (sum, item) => sum + Number(item.subtotal || 0),
+    0,
+  );
   const pagado = Number(pagoCon.value || 0);
 
   if (!pagado || pagado <= 0) {
@@ -459,12 +516,10 @@ async function cargarClientesFiado() {
       const option = document.createElement("option");
 
       option.value = cliente.id;
-      option.textContent =
-        `${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}`;
+      option.textContent = `${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}`;
 
       clienteFiado.appendChild(option);
     });
-
   } catch (error) {
     mostrarMensaje("Error al cargar clientes fiados.");
   }
@@ -551,9 +606,132 @@ async function cargarClientesFiado() {
     optionNuevo.value = "nuevo";
     optionNuevo.textContent = "+ Crear nuevo deudor";
     clienteFiado.appendChild(optionNuevo);
-
   } catch (error) {
     console.error("ERROR CLIENTES FIADO:", error);
     mostrarMensaje("Error al cargar clientes fiados.");
   }
+}
+
+function quitarUno(productoId) {
+  const item = carrito.find(
+    (item) => Number(item.producto_id) === Number(productoId)
+  );
+
+  if (!item) return;
+
+  if (item.cantidad > 1) {
+    item.cantidad -= 1;
+    item.subtotal = item.cantidad * Number(item.precio_unitario);
+  } else {
+    carrito = carrito.filter(
+      (item) => Number(item.producto_id) !== Number(productoId)
+    );
+  }
+
+  recalcularCarrito();
+  renderCarrito();
+}
+
+
+async function cargarPromocionesActivas() {
+  try {
+    const response = await fetch(`${API_URL}/promociones/activas`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      promocionesActivas = [];
+      return;
+    }
+
+    promocionesActivas = data;
+  } catch (error) {
+    console.error("Error al cargar promociones activas:", error);
+    promocionesActivas = [];
+  }
+}
+
+
+function obtenerPromocionProducto(productoId) {
+  return promocionesActivas.find(
+    (promo) => Number(promo.producto_id) === Number(productoId)
+  );
+}
+
+function calcularPrecioConPromocion(item) {
+  const promocion = obtenerPromocionProducto(item.producto_id);
+
+  const cantidad = Number(item.cantidad || 0);
+  const precioNormal = Number(item.precio_unitario_original || item.precio_unitario || 0);
+
+  if (!promocion) {
+    return {
+      subtotal: cantidad * precioNormal,
+      precioUnitarioFinal: precioNormal,
+      promocionAplicada: false,
+      cantidadPromocionAplicada: 0,
+      descuentoPromocion: 0,
+      textoPromocion: "",
+    };
+  }
+
+  const cantidadRequerida = Number(promocion.cantidad_requerida);
+  const precioPromocion = Number(promocion.precio_promocion);
+
+  if (
+    !Number.isInteger(cantidad) ||
+    cantidad < cantidadRequerida ||
+    cantidadRequerida < 2 ||
+    precioPromocion <= 0
+  ) {
+    return {
+      subtotal: cantidad * precioNormal,
+      precioUnitarioFinal: precioNormal,
+      promocionAplicada: false,
+      cantidadPromocionAplicada: 0,
+      descuentoPromocion: 0,
+      textoPromocion: "",
+    };
+  }
+
+  const gruposPromo = Math.floor(cantidad / cantidadRequerida);
+  const cantidadConPromo = gruposPromo * cantidadRequerida;
+  const cantidadNormal = cantidad - cantidadConPromo;
+
+  const subtotalPromo = gruposPromo * precioPromocion;
+  const subtotalNormal = cantidadNormal * precioNormal;
+
+  const subtotalFinal = subtotalPromo + subtotalNormal;
+  const subtotalOriginal = cantidad * precioNormal;
+  const descuentoPromocion = subtotalOriginal - subtotalFinal;
+
+  return {
+    subtotal: subtotalFinal,
+    precioUnitarioFinal: subtotalFinal / cantidad,
+    promocionAplicada: true,
+    cantidadPromocionAplicada: cantidadConPromo,
+    descuentoPromocion,
+    textoPromocion: `${cantidadRequerida} por $${precioPromocion.toFixed(2)}`,
+  };
+}
+
+function recalcularCarrito() {
+  carrito = carrito.map((item) => {
+    const resultado = calcularPrecioConPromocion(item);
+
+    return {
+      ...item,
+      precio_unitario: resultado.precioUnitarioFinal,
+      subtotal: resultado.subtotal,
+      promocion_aplicada: resultado.promocionAplicada,
+      texto_promocion: resultado.textoPromocion,
+      cantidad_promocion_aplicada: resultado.cantidadPromocionAplicada,
+      descuento_promocion: resultado.descuentoPromocion,
+    };
+  });
 }

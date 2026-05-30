@@ -34,12 +34,21 @@ const crearCorteCaja = (req, res) => {
       : "2000-01-01 00:00:00";
 
     const queryVentasEfectivo = `
-      SELECT COALESCE(SUM(total), 0) AS total_efectivo
+      SELECT COALESCE(SUM(total), 0) AS total_efectivo_bruto
       FROM ventas
       WHERE tienda_id = ?
-      AND estado = 'completada'
       AND metodo_pago = 'efectivo'
       AND fecha_venta > ?
+    `;
+
+    const queryDevolucionesEfectivo = `
+      SELECT COALESCE(SUM(d.total_devuelto), 0) AS total_devoluciones_efectivo
+      FROM devoluciones d
+      INNER JOIN ventas v
+        ON v.id = d.venta_id
+      WHERE d.tienda_id = ?
+      AND v.metodo_pago = 'efectivo'
+      AND d.fecha_devolucion > ?
     `;
 
     const queryMovimientos = `
@@ -63,83 +72,111 @@ const crearCorteCaja = (req, res) => {
         if (errorVentas) {
           return res.status(500).json({
             error: "Error al calcular ventas en efectivo",
+            detalle: errorVentas.message,
           });
         }
 
         db.get(
-          queryMovimientos,
+          queryDevolucionesEfectivo,
           [tienda_id, fechaUltimoCorte],
-          (errorMovimientos, movimientosData) => {
-            if (errorMovimientos) {
+          (errorDevoluciones, devolucionesData) => {
+            if (errorDevoluciones) {
               return res.status(500).json({
-                error: "Error al calcular movimientos de caja",
+                error: "Error al calcular devoluciones en efectivo",
+                detalle: errorDevoluciones.message,
               });
             }
 
-            const totalEfectivo = Number(
-              (ventasData.total_efectivo || 0).toFixed(2)
-            );
-
-            const totalEntradas = Number(
-              (movimientosData.total_entradas || 0).toFixed(2)
-            );
-
-            const totalSalidas = Number(
-              (movimientosData.total_salidas || 0).toFixed(2)
-            );
-
-            const dineroEsperado = Number(
-              (totalEfectivo + totalEntradas - totalSalidas).toFixed(2)
-            );
-
-            const diferencia = Number(
-              (dinero_real - dineroEsperado).toFixed(2)
-            );
-
-            const queryInsert = `
-              INSERT INTO cortes_caja (
-                tienda_id,
-                usuario_id,
-                total_efectivo,
-                total_gastos,
-                dinero_esperado,
-                dinero_real,
-                diferencia,
-                observaciones
-              )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-
-            db.run(
-              queryInsert,
-              [
-                tienda_id,
-                usuario_id,
-                totalEfectivo,
-                totalSalidas,
-                dineroEsperado,
-                dinero_real,
-                diferencia,
-                observaciones || null,
-              ],
-              function (errorInsert) {
-                if (errorInsert) {
+            db.get(
+              queryMovimientos,
+              [tienda_id, fechaUltimoCorte],
+              (errorMovimientos, movimientosData) => {
+                if (errorMovimientos) {
                   return res.status(500).json({
-                    error: "Error al registrar corte",
+                    error: "Error al calcular movimientos de caja",
+                    detalle: errorMovimientos.message,
                   });
                 }
 
-                res.status(201).json({
-                  mensaje: "Corte registrado correctamente",
-                  corte_id: this.lastID,
-                  desde: fechaUltimoCorte,
-                  ventas_efectivo: totalEfectivo,
-                  entradas_caja: totalEntradas,
-                  salidas_caja: totalSalidas,
-                  dinero_esperado: dineroEsperado,
-                  dinero_real,
-                  diferencia,
-                });
+                const totalEfectivoBruto = Number(
+                  Number(ventasData.total_efectivo_bruto || 0).toFixed(2)
+                );
+
+                const totalDevolucionesEfectivo = Number(
+                  Number(devolucionesData.total_devoluciones_efectivo || 0).toFixed(2)
+                );
+
+                const totalEfectivo = Number(
+                  (totalEfectivoBruto - totalDevolucionesEfectivo).toFixed(2)
+                );
+
+                const totalEntradas = Number(
+                  Number(movimientosData.total_entradas || 0).toFixed(2)
+                );
+
+                const totalSalidas = Number(
+                  Number(movimientosData.total_salidas || 0).toFixed(2)
+                );
+
+                const dineroEsperado = Number(
+                  (totalEfectivo + totalEntradas - totalSalidas).toFixed(2)
+                );
+
+                const diferencia = Number(
+                  (Number(dinero_real) - dineroEsperado).toFixed(2)
+                );
+
+                const queryInsert = `
+ INSERT INTO cortes_caja (
+  tienda_id,
+  usuario_id,
+  total_efectivo,
+  total_gastos,
+  total_devoluciones,
+  dinero_esperado,
+  dinero_real,
+  diferencia,
+  observaciones
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+
+                db.run(
+                  queryInsert,
+[
+  tienda_id,
+  usuario_id,
+  totalEfectivo,
+  totalSalidas,
+  totalDevolucionesEfectivo,
+  dineroEsperado,
+  dinero_real,
+  diferencia,
+  observaciones || null,
+],
+                  function (errorInsert) {
+                    if (errorInsert) {
+                      return res.status(500).json({
+                        error: "Error al registrar corte",
+                        detalle: errorInsert.message,
+                      });
+                    }
+
+                    return res.status(201).json({
+                      mensaje: "Corte registrado correctamente",
+                      corte_id: this.lastID,
+                      desde: fechaUltimoCorte,
+                      ventas_efectivo_brutas: totalEfectivoBruto,
+                      devoluciones_efectivo: totalDevolucionesEfectivo,
+                      ventas_efectivo: totalEfectivo,
+                      entradas_caja: totalEntradas,
+                      salidas_caja: totalSalidas,
+                      dinero_esperado: dineroEsperado,
+                      dinero_real,
+                      diferencia,
+                    });
+                  }
+                );
               }
             );
           }

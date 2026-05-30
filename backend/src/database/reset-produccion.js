@@ -37,6 +37,7 @@ async function resetProduccion() {
     "fiados",
     "clientes_fiado",
     "accesos_usuarios",
+    "promociones",
   ];
 
   try {

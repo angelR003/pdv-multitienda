@@ -14,6 +14,7 @@ const btnLogout = document.getElementById("btnLogout");
 
 if (!esAdmin) {
   document.getElementById("cardUsuarios")?.remove();
+  document.getElementById("cardPromociones")?.remove();
 }
 
 usuarioNombre.textContent = usuario.nombre;

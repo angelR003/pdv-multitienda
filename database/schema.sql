@@ -80,7 +80,6 @@ CREATE TABLE IF NOT EXISTS ventas (
   FOREIGN KEY (tienda_id) REFERENCES tiendas(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
-
 CREATE TABLE IF NOT EXISTS venta_detalles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   venta_id INTEGER NOT NULL,
@@ -92,9 +91,18 @@ CREATE TABLE IF NOT EXISTS venta_detalles (
   unidad TEXT NOT NULL,
   precio_unitario REAL NOT NULL,
   subtotal REAL NOT NULL,
+
+  promocion_id INTEGER,
+  precio_unitario_original REAL,
+  precio_unitario_final REAL,
+  cantidad_promocion_aplicada INTEGER DEFAULT 0,
+  descuento_promocion REAL DEFAULT 0,
+
   FOREIGN KEY (venta_id) REFERENCES ventas(id),
-  FOREIGN KEY (producto_id) REFERENCES productos(id)
+  FOREIGN KEY (producto_id) REFERENCES productos(id),
+  FOREIGN KEY (promocion_id) REFERENCES promociones(id)
 );
+
 
 CREATE TABLE IF NOT EXISTS entradas_mercancia (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -412,3 +420,14 @@ CREATE TABLE IF NOT EXISTS abonos_fiado (
   FOREIGN KEY (tienda_id) REFERENCES tiendas(id)
 );
 
+CREATE TABLE IF NOT EXISTS promociones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  producto_id INTEGER NOT NULL,
+  cantidad_requerida INTEGER NOT NULL,
+  precio_promocion REAL NOT NULL,
+  activa INTEGER NOT NULL DEFAULT 1,
+  fecha_creacion TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion TEXT,
+
+  FOREIGN KEY (producto_id) REFERENCES productos(id)
+);

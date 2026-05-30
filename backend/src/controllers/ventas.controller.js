@@ -3,6 +3,67 @@ const redondearAMedioPeso = (monto) => {
   return Math.round(monto * 2) / 2;
 };
 
+const calcularPromocionProducto = (cantidad, precioNormal, promocion) => {
+  const cantidadNumero = Number(cantidad);
+  const precioNormalNumero = Number(precioNormal);
+
+  if (!promocion) {
+    const subtotalNormal = cantidadNumero * precioNormalNumero;
+
+    return {
+      subtotal: subtotalNormal,
+      precioUnitarioFinal: precioNormalNumero,
+      precioUnitarioOriginal: precioNormalNumero,
+      promocionId: null,
+      cantidadPromocionAplicada: 0,
+      descuentoPromocion: 0,
+    };
+  }
+
+  const cantidadRequerida = Number(promocion.cantidad_requerida);
+  const precioPromocion = Number(promocion.precio_promocion);
+
+  if (
+    !Number.isInteger(cantidadNumero) ||
+    cantidadNumero < cantidadRequerida ||
+    cantidadRequerida < 2 ||
+    precioPromocion <= 0
+  ) {
+    const subtotalNormal = cantidadNumero * precioNormalNumero;
+
+    return {
+      subtotal: subtotalNormal,
+      precioUnitarioFinal: precioNormalNumero,
+      precioUnitarioOriginal: precioNormalNumero,
+      promocionId: null,
+      cantidadPromocionAplicada: 0,
+      descuentoPromocion: 0,
+    };
+  }
+
+  const gruposPromo = Math.floor(cantidadNumero / cantidadRequerida);
+  const cantidadConPromo = gruposPromo * cantidadRequerida;
+  const cantidadNormal = cantidadNumero - cantidadConPromo;
+
+  const subtotalPromo = gruposPromo * precioPromocion;
+  const subtotalNormalRestante = cantidadNormal * precioNormalNumero;
+
+  const subtotalFinal = subtotalPromo + subtotalNormalRestante;
+  const subtotalOriginal = cantidadNumero * precioNormalNumero;
+
+  const descuentoPromocion = subtotalOriginal - subtotalFinal;
+  const precioUnitarioFinal = subtotalFinal / cantidadNumero;
+
+  return {
+    subtotal: subtotalFinal,
+    precioUnitarioFinal,
+    precioUnitarioOriginal: precioNormalNumero,
+    promocionId: promocion.id,
+    cantidadPromocionAplicada: cantidadConPromo,
+    descuentoPromocion,
+  };
+};
+
 const crearVenta = (req, res) => {
   const { tienda_id, usuario_id, metodo_pago, productos, cliente_fiado_id } =
     req.body;
@@ -97,35 +158,82 @@ AND producto_id = ?
                 );
               }
 
-              const precioUnitario = producto.precio_aplicable;
-              let subtotal = cantidad * precioUnitario;
+const precioUnitarioNormal = Number(producto.precio_aplicable);
 
-              if (producto.tipo_producto === "peso_variable") {
-                subtotal = redondearAMedioPeso(subtotal);
-              }
+db.get(
+  `
+  SELECT
+    id,
+    cantidad_requerida,
+    precio_promocion
+  FROM promociones
+  WHERE producto_id = ?
+  AND activa = 1
+  LIMIT 1
+  `,
+  [producto.id],
+  (errorPromocion, promocion) => {
+    if (errorPromocion) {
+      return rollback(res, "Error al consultar promoción");
+    }
 
-              subtotalVenta += subtotal;
+    let resultadoPrecio;
 
-              detalles.push({
-                producto_id: producto.id,
-                producto_inventario_id:
-                  Number(producto.es_derivado) === 1
-                    ? producto.producto_padre_id
-                    : producto.id,
-                cantidad_inventario:
-                  Number(producto.es_derivado) === 1
-                    ? Number(cantidad) * Number(producto.factor_conversion)
-                    : Number(cantidad),
-                codigo_barras: producto.codigo_barras,
-                nombre_producto: producto.nombre,
-                tipo_producto: producto.tipo_producto,
-                cantidad,
-                unidad: producto.unidad,
-                precio_unitario: precioUnitario,
-                subtotal,
-              });
+    const productoPuedeTenerPromo =
+      producto.tipo_producto !== "peso_variable" &&
+      Number(producto.es_derivado) !== 1;
 
-              procesarProducto(index + 1);
+    if (productoPuedeTenerPromo) {
+      resultadoPrecio = calcularPromocionProducto(
+        cantidad,
+        precioUnitarioNormal,
+        promocion
+      );
+    } else {
+      resultadoPrecio = calcularPromocionProducto(
+        cantidad,
+        precioUnitarioNormal,
+        null
+      );
+    }
+
+    let subtotal = resultadoPrecio.subtotal;
+
+    if (producto.tipo_producto === "peso_variable") {
+      subtotal = redondearAMedioPeso(subtotal);
+    }
+
+    subtotalVenta += subtotal;
+
+    detalles.push({
+      producto_id: producto.id,
+      producto_inventario_id:
+        Number(producto.es_derivado) === 1
+          ? producto.producto_padre_id
+          : producto.id,
+      cantidad_inventario:
+        Number(producto.es_derivado) === 1
+          ? Number(cantidad) * Number(producto.factor_conversion)
+          : Number(cantidad),
+      codigo_barras: producto.codigo_barras,
+      nombre_producto: producto.nombre,
+      tipo_producto: producto.tipo_producto,
+      cantidad,
+      unidad: producto.unidad,
+
+      precio_unitario: resultadoPrecio.precioUnitarioFinal,
+      subtotal,
+
+      promocion_id: resultadoPrecio.promocionId,
+      precio_unitario_original: resultadoPrecio.precioUnitarioOriginal,
+      precio_unitario_final: resultadoPrecio.precioUnitarioFinal,
+      cantidad_promocion_aplicada: resultadoPrecio.cantidadPromocionAplicada,
+      descuento_promocion: resultadoPrecio.descuentoPromocion,
+    });
+
+    procesarProducto(index + 1);
+  }
+);
             },
           );
         },
@@ -208,30 +316,40 @@ AND producto_id = ?
 
       db.run(
         `
-        INSERT INTO venta_detalles (
-          venta_id,
-          producto_id,
-          codigo_barras,
-          nombre_producto,
-          tipo_producto,
-          cantidad,
-          unidad,
-          precio_unitario,
-          subtotal
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       INSERT INTO venta_detalles (
+  venta_id,
+  producto_id,
+  codigo_barras,
+  nombre_producto,
+  tipo_producto,
+  cantidad,
+  unidad,
+  precio_unitario,
+  subtotal,
+  promocion_id,
+  precio_unitario_original,
+  precio_unitario_final,
+  cantidad_promocion_aplicada,
+  descuento_promocion
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
-          ventaId,
-          detalle.producto_id,
-          detalle.codigo_barras,
-          detalle.nombre_producto,
-          detalle.tipo_producto,
-          detalle.cantidad,
-          detalle.unidad,
-          detalle.precio_unitario,
-          detalle.subtotal,
-        ],
+  ventaId,
+  detalle.producto_id,
+  detalle.codigo_barras,
+  detalle.nombre_producto,
+  detalle.tipo_producto,
+  detalle.cantidad,
+  detalle.unidad,
+  detalle.precio_unitario,
+  detalle.subtotal,
+  detalle.promocion_id,
+  detalle.precio_unitario_original,
+  detalle.precio_unitario_final,
+  detalle.cantidad_promocion_aplicada,
+  detalle.descuento_promocion,
+],
         (error) => {
           if (error) return rollback(res, "Error al guardar detalle de venta");
 
@@ -408,20 +526,48 @@ const obtenerDetalleVenta = (req, res) => {
 
     WHERE v.id = ?
   `;
+////////////////////////////////////////////////////////////////////////////////////////////////kldnjkcncsdcnds
+const queryDetalles = `
+  SELECT
+    vd.id,
+    vd.venta_id,
+    vd.producto_id,
+    vd.cantidad,
+    vd.unidad,
+    vd.precio_unitario,
+    vd.subtotal,
+    vd.nombre_producto AS producto_nombre,
+    vd.tipo_producto,
 
-  const queryDetalles = `
-    SELECT
-      vd.*,
-      p.nombre AS producto,
-      p.unidad
+    vd.promocion_id,
+    vd.precio_unitario_original,
+    vd.precio_unitario_final,
+    vd.cantidad_promocion_aplicada,
+    vd.descuento_promocion,
 
-    FROM venta_detalles vd
+    pr.cantidad_requerida AS promocion_cantidad_requerida,
+    pr.precio_promocion AS promocion_precio,
 
-    INNER JOIN productos p
-      ON p.id = vd.producto_id
+    COALESCE(SUM(dd.cantidad), 0) AS cantidad_devuelta,
 
-    WHERE vd.venta_id = ?
-  `;
+    vd.cantidad - COALESCE(SUM(dd.cantidad), 0) AS cantidad_restante_devolucion
+
+  FROM venta_detalles vd
+
+  LEFT JOIN promociones pr
+    ON pr.id = vd.promocion_id
+
+  LEFT JOIN devoluciones d
+    ON d.venta_id = vd.venta_id
+
+  LEFT JOIN devolucion_detalles dd
+    ON dd.devolucion_id = d.id
+    AND dd.producto_id = vd.producto_id
+
+  WHERE vd.venta_id = ?
+
+  GROUP BY vd.id
+`;
 
   db.get(queryVenta, [id], (errorVenta, venta) => {
     if (errorVenta) {

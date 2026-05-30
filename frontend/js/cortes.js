@@ -29,6 +29,7 @@ const dineroRealResultado = document.getElementById("dineroRealResultado");
 const diferencia = document.getElementById("diferencia");
 const historialCortes = document.getElementById("historialCortes");
 const tablaCortes = document.getElementById("tablaCortes");
+const devolucionesEfectivo = document.getElementById("devolucionesEfectivo");
 
 
 
@@ -90,6 +91,9 @@ function mostrarResultado(data) {
 
   ventasEfectivo.textContent =
     `$${Number(data.ventas_efectivo).toFixed(2)}`;
+
+  devolucionesEfectivo.textContent =
+    `$${Number(data.devoluciones_efectivo || 0).toFixed(2)}`
 
   entradasCaja.textContent =
     `$${Number(data.entradas_caja).toFixed(2)}`;

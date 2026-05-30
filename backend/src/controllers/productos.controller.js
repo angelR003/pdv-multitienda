@@ -311,20 +311,35 @@ const obtenerDetalleVenta = (req, res) => {
     WHERE v.id = ?
   `;
 
-  const queryDetalles = `
-    SELECT
-      vd.*,
-      p.nombre AS producto,
-      p.unidad
+const queryDetalles = `
+  SELECT
+    vd.id,
+    vd.venta_id,
+    vd.producto_id,
+    vd.nombre_producto AS producto,
+    vd.tipo_producto,
+    vd.cantidad,
+    vd.unidad,
+    vd.precio_unitario,
+    vd.subtotal,
 
-    FROM venta_detalles vd
+    COALESCE(SUM(dd.cantidad), 0) AS cantidad_devuelta,
 
-    INNER JOIN productos p
-      ON p.id = vd.producto_id
+    vd.cantidad - COALESCE(SUM(dd.cantidad), 0) AS cantidad_restante_devolucion
 
-    WHERE vd.venta_id = ?
-  `;
+  FROM venta_detalles vd
 
+  LEFT JOIN devoluciones d
+    ON d.venta_id = vd.venta_id
+
+  LEFT JOIN devolucion_detalles dd
+    ON dd.devolucion_id = d.id
+    AND dd.producto_id = vd.producto_id
+
+  WHERE vd.venta_id = ?
+
+  GROUP BY vd.id
+`;
   db.get(queryVenta, [id], (errorVenta, venta) => {
     if (errorVenta) {
       return res.status(500).json({
