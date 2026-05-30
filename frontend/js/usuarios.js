@@ -22,8 +22,18 @@ const mensaje = document.getElementById("mensaje");
 const tablaUsuarios = document.getElementById("tablaUsuarios");
 const tablaAccesos = document.getElementById("tablaAccesos");
 const tituloAccesos = document.getElementById("tituloAccesos");
+const modalPassword = document.getElementById("modalPassword");
+const nuevaPasswordInput = document.getElementById("nuevaPasswordInput");
+const mensajePassword = document.getElementById("mensajePassword");
+const btnConfirmarPassword = document.getElementById("btnConfirmarPassword");
+const btnCancelarPassword = document.getElementById("btnCancelarPassword");
+
+let usuarioPasswordId = null;
 
 btnCrear.addEventListener("click", crearUsuario);
+btnCancelarPassword.addEventListener("click", cerrarModalPassword);
+
+btnConfirmarPassword.addEventListener("click", guardarNuevaPassword);
 
 cargarUsuarios();
 
@@ -199,13 +209,44 @@ function editarUsuario(usuario) {
   btnCrear.textContent = "Guardar cambios";
 }
 
-async function cambiarPassword(id) {
-  const nuevaPassword = prompt("Nueva contraseña:");
+function cambiarPassword(id) {
+  usuarioPasswordId = id;
+  nuevaPasswordInput.value = "";
+  mensajePassword.textContent = "";
 
-  if (!nuevaPassword) return;
+  modalPassword.classList.remove("hidden");
+  modalPassword.classList.add("flex");
+
+  setTimeout(() => {
+    nuevaPasswordInput.focus();
+  }, 50);
+}
+
+function cerrarModalPassword() {
+  usuarioPasswordId = null;
+  nuevaPasswordInput.value = "";
+  mensajePassword.textContent = "";
+
+  modalPassword.classList.add("hidden");
+  modalPassword.classList.remove("flex");
+}
+
+async function guardarNuevaPassword() {
+  const nuevaPassword = nuevaPasswordInput.value.trim();
+
+  if (!usuarioPasswordId) {
+    mensajePassword.textContent = "Usuario no seleccionado.";
+    return;
+  }
+
+  if (!nuevaPassword || nuevaPassword.length < 4) {
+    mensajePassword.textContent = "La contraseña debe tener al menos 4 caracteres.";
+    nuevaPasswordInput.focus();
+    return;
+  }
 
   try {
-    const response = await fetch(`${API_URL}/usuarios/${id}/password`, {
+    const response = await fetch(`${API_URL}/usuarios/${usuarioPasswordId}/password`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -218,9 +259,15 @@ async function cambiarPassword(id) {
 
     const data = await response.json();
 
-    mostrarMensaje(data.mensaje || data.error);
+    if (!response.ok) {
+      mensajePassword.textContent = data.error || "Error al cambiar contraseña.";
+      return;
+    }
+
+    cerrarModalPassword();
+    mostrarMensaje("Contraseña actualizada correctamente.");
   } catch (error) {
-    mostrarMensaje("Error al cambiar contraseña.");
+    mensajePassword.textContent = "Error al conectar.";
   }
 }
 

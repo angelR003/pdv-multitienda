@@ -18,6 +18,7 @@ const tablaDetalles = document.getElementById("tablaDetalles");
 
 const usuario = JSON.parse(localStorage.getItem("usuario"));
 const tiendaId = Number(localStorage.getItem("tienda_id"));
+const motivoDevolucion = document.getElementById("motivoDevolucion");
 
 if (!tiendaId) {
   window.location.href = "./config-terminal.html";
@@ -253,6 +254,7 @@ async function realizarDevolucion() {
     }
 
     mostrarMensaje("Devolución realizada correctamente.");
+    motivoDevolucion.value = "";
 
     btnDevolver.disabled = true;
 
@@ -336,12 +338,13 @@ async function devolverRenglon(
     return;
   }
 
-  const motivo = prompt("Motivo de la devolución:");
+const motivo = motivoDevolucion.value.trim();
 
-  if (!motivo || !motivo.trim()) {
-    mostrarMensaje("El motivo es obligatorio.");
-    return;
-  }
+if (!motivo) {
+  mostrarMensaje("El motivo es obligatorio.");
+  motivoDevolucion.focus();
+  return;
+}
 
   const confirmar = confirm(
     `¿Seguro que quieres devolver ${cantidad} pieza(s)?`
@@ -366,7 +369,7 @@ async function devolverRenglon(
           usuario_id: usuario.id,
           cantidad,
           precio_unitario: precioUnitario,
-          motivo: motivo.trim(),
+          motivo,
         }),
       }
     );
