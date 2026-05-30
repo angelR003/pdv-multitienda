@@ -26,7 +26,6 @@ if (!tiendaId) {
 
 const esAdmin = usuario.rol === "administrador";
 
-const motivoDevolucion = document.getElementById("motivoDevolucion");
 
 const btnDevolver = document.getElementById("btnDevolver");
 
