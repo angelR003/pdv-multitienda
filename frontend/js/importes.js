@@ -28,6 +28,7 @@ const cantidadDevolverEnvase = document.getElementById("cantidadDevolverEnvase")
 const textoMaximoEnvases = document.getElementById("textoMaximoEnvases");
 const btnCancelarDevolucionEnvase = document.getElementById("btnCancelarDevolucionEnvase");
 const btnConfirmarDevolucionEnvase = document.getElementById("btnConfirmarDevolucionEnvase");
+const mensajeDevolucionEnvase = document.getElementById("mensajeDevolucionEnvase");
 
 let devolucionEnvasePendiente = null;
 let tiposEnvase = [];
@@ -208,7 +209,7 @@ async function devolverEnvase(id, maximo) {
   textoMaximoEnvases.textContent = `Máximo permitido: ${maximo}`;
   cantidadDevolverEnvase.value = "";
   cantidadDevolverEnvase.max = maximo;
-
+  mensajeDevolucionEnvase.textContent = "";
   modalDevolverEnvase.classList.remove("hidden");
 
   setTimeout(() => {
@@ -231,15 +232,20 @@ btnConfirmarDevolucionEnvase?.addEventListener("click", async () => {
   const cantidad = Number(cantidadDevolverEnvase.value);
   const { id, maximo } = devolucionEnvasePendiente;
 
-  if (!cantidad || cantidad <= 0) {
-    mostrarMensaje("Ingresa una cantidad válida.");
-    return;
-  }
+if (!cantidad || cantidad <= 0) {
+  mensajeDevolucionEnvase.textContent = "Ingresa una cantidad valida.";
+  return;
+}
 
-  if (cantidad > maximo) {
-    mostrarMensaje(`No puedes recibir más de ${maximo} envases.`);
-    return;
-  }
+  if (!Number.isInteger(cantidad)) {
+  mensajeDevolucionEnvase.textContent = "La cantidad debe ser un numero entero.";
+  return;
+}
+
+if (cantidad > maximo) {
+  mensajeDevolucionEnvase.textContent = `No puedes recibir mas de ${maximo} envases.`;
+  return;
+}
 
   devolucionEnProceso = true;
   btnConfirmarDevolucionEnvase.disabled = true;
@@ -257,10 +263,11 @@ btnConfirmarDevolucionEnvase?.addEventListener("click", async () => {
 
     const data = await response.json();
 
-    if (!response.ok) {
-      mostrarMensaje(data.error || "Error al recibir envases.");
-      return;
-    }
+if (!response.ok) {
+  mensajeDevolucionEnvase.textContent =
+    data.error || "Error al recibir envases.";
+  return;
+}
 
     mostrarMensaje(data.mensaje || "Envases recibidos correctamente.");
 

@@ -45,23 +45,24 @@ const registrarImporte = (req, res) => {
     "envase_prestado",
   ];
 
-  if (
-    !tienda_id ||
-    !clienteNombre ||
-    !tipo_envase_id ||
-    !escenario ||
-    !cantidadNumero ||
-    cantidadNumero <= 0
-  ) {
-    return res.status(400).json({
-      error: "Todos los campos son obligatorios",
-    });
-    if (!Number.isInteger(cantidadNumero)) {
+ if (
+  !tienda_id ||
+  !clienteNombre ||
+  !tipo_envase_id ||
+  !escenario ||
+  !cantidadNumero ||
+  cantidadNumero <= 0
+) {
+  return res.status(400).json({
+    error: "Todos los campos son obligatorios",
+  });
+}
+
+if (!Number.isInteger(cantidadNumero)) {
   return res.status(400).json({
     error: "La cantidad de envases debe ser entera",
   });
 }
-  }
 
   if (!escenariosValidos.includes(escenario)) {
     return res.status(400).json({
@@ -396,11 +397,7 @@ const devolverImporte = (req, res) => {
         });
       }
 
-      if (importe.escenario === "envase_prestado" && !importe.cliente_fiado_id) {
-        return res.status(400).json({
-          error: "Este envase prestado no está ligado a un cliente fiado",
-        });
-      }
+
 
       const nuevaCantidad = importe.cantidad_pendiente - cantidadNumero;
 
@@ -494,36 +491,41 @@ const devolverImporte = (req, res) => {
             return;
           }
 
-          if (importe.escenario === "envase_prestado") {
-            db.run(
-              `
-              INSERT INTO abonos_fiado (
-                cliente_id,
-                usuario_id,
-                tienda_id,
-                monto,
-                observaciones
-              )
-              VALUES (?, ?, ?, ?, ?)
-              `,
-              [
-                importe.cliente_fiado_id,
-                req.usuario.id,
-                importe.tienda_id,
-                montoDevolver,
-                `Recepción de envase prestado: ${importe.cliente}`,
-              ],
-              (errorAbono) => {
-                if (errorAbono) {
-                  return rollbackImporte("Error al descontar deuda del cliente");
-                }
+if (importe.escenario === "envase_prestado") {
+  if (!importe.cliente_fiado_id) {
+    registrarInventarioEnvase();
+    return;
+  }
 
-                registrarInventarioEnvase();
-              }
-            );
+  db.run(
+    `
+    INSERT INTO abonos_fiado (
+      cliente_id,
+      usuario_id,
+      tienda_id,
+      monto,
+      observaciones
+    )
+    VALUES (?, ?, ?, ?, ?)
+    `,
+    [
+      importe.cliente_fiado_id,
+      req.usuario.id,
+      importe.tienda_id,
+      montoDevolver,
+      `Recepción de envase prestado: ${importe.cliente}`,
+    ],
+    (errorAbono) => {
+      if (errorAbono) {
+        return rollbackImporte("Error al descontar deuda del cliente");
+      }
 
-            return;
-          }
+      registrarInventarioEnvase();
+    }
+  );
+
+  return;
+}
 
           registrarInventarioEnvase();
         };
