@@ -11,16 +11,48 @@ const esAdmin = usuario.rol === "administrador";
 const usuarioNombre = document.getElementById("usuarioNombre");
 const usuarioRol = document.getElementById("usuarioRol");
 const btnLogout = document.getElementById("btnLogout");
+const btnNotificaciones = document.getElementById("btnNotificaciones");
+const contadorNotificaciones = document.getElementById("contadorNotificaciones");
+const panelNotificaciones = document.getElementById("panelNotificaciones");
+const listaNotificaciones = document.getElementById("listaNotificaciones");
+const iconoCampana = document.getElementById("iconoCampana");
+
 
 if (!esAdmin) {
   document.getElementById("cardUsuarios")?.remove();
   document.getElementById("cardPromociones")?.remove();
+    document.getElementById("cardTraspasos")?.remove();
+      document.getElementById("cardReportes")?.remove();
 }
 
-usuarioNombre.textContent = usuario.nombre;
-usuarioRol.textContent = `${usuario.rol} • ${tiendaNombre}`;
+if (usuarioNombre) {
+  usuarioNombre.textContent = usuario.nombre;
+}
 
-btnLogout.addEventListener("click", cerrarSesion);
+if (usuarioRol) {
+  usuarioRol.textContent = `${usuario.rol} • ${tiendaNombre}`;
+}
+
+btnLogout?.addEventListener("click", cerrarSesion);
+
+
+btnNotificaciones?.addEventListener("click", () => {
+  panelNotificaciones.classList.toggle("hidden");
+});
+
+document.addEventListener("click", (event) => {
+  if (
+    panelNotificaciones &&
+    btnNotificaciones &&
+    !panelNotificaciones.contains(event.target) &&
+    !btnNotificaciones.contains(event.target)
+  ) {
+    panelNotificaciones.classList.add("hidden");
+  }
+});
+
+cargarNotificaciones();
+
 
 function cerrarSesion() {
   localStorage.removeItem("token");
@@ -119,3 +151,74 @@ setTimeout(() => {
 
 document.addEventListener("DOMContentLoaded", inicializarActualizador);
 
+async function cargarNotificaciones() {
+  try {
+    const response = await fetch("http://localhost:3000/api/traspasos/notificaciones", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      renderNotificaciones([]);
+      return;
+    }
+
+    renderNotificaciones(data);
+  } catch (error) {
+    renderNotificaciones([]);
+  }
+}
+
+function renderNotificaciones(notificaciones) {
+  listaNotificaciones.innerHTML = "";
+
+  if (notificaciones.length === 0) {
+    contadorNotificaciones.classList.add("hidden");
+          iconoCampana?.classList.remove("campana-activa");
+    listaNotificaciones.innerHTML = `
+      <div class="p-5 text-zinc-500 text-sm">
+        No hay traspasos pendientes.
+      </div>
+    `;
+
+    return;
+  }
+
+  contadorNotificaciones.textContent = notificaciones.length;
+  contadorNotificaciones.classList.remove("hidden");
+  iconoCampana?.classList.add("campana-activa");
+  notificaciones.forEach((notificacion) => {
+    const a = document.createElement("a");
+
+    a.href = `./traspaso-detalle.html?id=${notificacion.id}`;
+    a.className =
+      "block p-4 border-b border-zinc-800 hover:bg-zinc-900 transition";
+
+    a.innerHTML = `
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="font-black">
+            Traspaso #${notificacion.id}
+          </p>
+
+          <p class="text-sm text-zinc-400 mt-1">
+            ${notificacion.tienda_origen} → ${notificacion.tienda_destino}
+          </p>
+
+          <p class="text-sm text-zinc-300 mt-2">
+            ${notificacion.resumen_productos || "Productos pendientes por recibir"}
+          </p>
+        </div>
+
+        <span class="bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 rounded-full px-2 py-1 text-xs font-bold">
+          enviado
+        </span>
+      </div>
+    `;
+
+    listaNotificaciones.appendChild(a);
+  });
+}

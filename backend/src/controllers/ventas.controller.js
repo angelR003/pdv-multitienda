@@ -64,9 +64,257 @@ const calcularPromocionProducto = (cantidad, precioNormal, promocion) => {
   };
 };
 
+const escenariosEnvaseValidos = [
+  "trajo_envase",
+  "dejo_importe",
+  "envase_prestado",
+];
+const registrarEnvasesVenta = ({ tienda_id, usuario_id, folio, envases }, callback) => {
+  if (!Array.isArray(envases) || envases.length === 0) {
+    callback();
+    return;
+  }
+
+  const resolverClienteEnvase = (envase, callbackCliente) => {
+        if (envase.escenario === "trajo_envase") {
+      callbackCliente(null, {
+        clienteFiadoId: null,
+        clienteNombre: "Cliente mostrador",
+      });
+      return;
+    }
+    if (envase.cliente_fiado_id) {
+      callbackCliente(null, {
+        clienteFiadoId: envase.cliente_fiado_id,
+        clienteNombre: envase.cliente,
+      });
+      return;
+    }
+
+    const nombreCliente = String(envase.cliente || "").trim();
+
+    if (!nombreCliente) {
+      callbackCliente("Cliente obligatorio para envase");
+      return;
+    }
+
+    db.run(
+      `
+      INSERT INTO clientes_fiado (
+        nombre_completo,
+        apodo,
+        telefono,
+        limite_credito
+      )
+      VALUES (?, ?, ?, ?)
+      `,
+      [nombreCliente, null, null, 0],
+      function (errorCliente) {
+        if (errorCliente) {
+          callbackCliente("Error al crear cliente para envase");
+          return;
+        }
+
+        callbackCliente(null, {
+          clienteFiadoId: this.lastID,
+          clienteNombre: nombreCliente,
+        });
+      }
+    );
+  };
+
+  const procesarEnvase = (index) => {
+    if (index >= envases.length) {
+      callback();
+      return;
+    }
+
+    const envase = envases[index];
+
+    db.get(
+      `
+      SELECT *
+      FROM tipos_envase
+      WHERE id = ?
+      AND activo = 1
+      `,
+      [envase.tipo_envase_id],
+      (errorTipo, tipoEnvase) => {
+        if (errorTipo) {
+          callback("Error al consultar tipo de envase");
+          return;
+        }
+
+        if (!tipoEnvase) {
+          callback("Tipo de envase no encontrado");
+          return;
+        }
+
+        resolverClienteEnvase(envase, (errorCliente, clienteResuelto) => {
+          if (errorCliente) {
+            callback(errorCliente);
+            return;
+          }
+
+          const cantidad = Number(envase.cantidad);
+          const importeUnitario = Number(tipoEnvase.importe);
+          const importeTotal =
+            envase.escenario === "dejo_importe"
+              ? importeUnitario * cantidad
+              : 0;
+
+          db.run(
+            `
+            INSERT INTO importes_envases (
+              tienda_id,
+              usuario_id,
+              cliente,
+              cliente_fiado_id,
+              tipo_envase_id,
+              escenario,
+              cantidad,
+              cantidad_pendiente,
+              importe_unitario,
+              importe_total,
+              estado,
+              observaciones
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            [
+              tienda_id,
+              usuario_id,
+              clienteResuelto.clienteNombre,
+              clienteResuelto.clienteFiadoId,
+              envase.tipo_envase_id,
+              envase.escenario,
+              cantidad,
+              envase.escenario === "trajo_envase" ? 0 : cantidad,
+              importeUnitario,
+              importeTotal,
+              envase.escenario === "trajo_envase" ? "completado" : "pendiente",
+              `Venta ${folio} - ${envase.producto_nombre || "producto retornable"}`,
+            ],
+            (errorImporte) => {
+              if (errorImporte) {
+                callback("Error al registrar importe/envase");
+                return;
+              }
+
+              if (envase.escenario === "dejo_importe") {
+                db.run(
+                  `
+                  INSERT INTO movimientos_caja (
+                    tienda_id,
+                    usuario_id,
+                    tipo_movimiento,
+                    monto,
+                    concepto,
+                    observaciones
+                  )
+                  VALUES (?, ?, ?, ?, ?, ?)
+                  `,
+                  [
+                    tienda_id,
+                    usuario_id,
+                    "entrada_dinero",
+                    importeTotal,
+                    "Importe envases",
+                    clienteResuelto.clienteNombre,
+                  ],
+                  (errorCaja) => {
+                    if (errorCaja) {
+                      callback("Error al registrar movimiento de caja por envase");
+                      return;
+                    }
+
+                    procesarEnvase(index + 1);
+                  }
+                );
+
+                return;
+              }
+
+              if (envase.escenario === "envase_prestado") {
+                db.run(
+                  `
+                  INSERT INTO fiados (
+                    cliente_id,
+                    usuario_id,
+                    tienda_id,
+                    concepto,
+                    monto
+                  )
+                  VALUES (?, ?, ?, ?, ?)
+                  `,
+                  [
+                    clienteResuelto.clienteFiadoId,
+                    usuario_id,
+                    tienda_id,
+                    `Envase prestado - ${envase.producto_nombre || tipoEnvase.nombre}`,
+                    importeUnitario * cantidad,
+                  ],
+                  (errorFiado) => {
+                    if (errorFiado) {
+                      callback("Error al registrar deuda de envase");
+                      return;
+                    }
+
+                    procesarEnvase(index + 1);
+                  }
+                );
+
+                return;
+              }
+
+              if (envase.escenario === "trajo_envase") {
+                db.run(
+                  `
+                  INSERT INTO inventario_envases (
+                    tienda_id,
+                    tipo_envase_id,
+                    cantidad_vacios
+                  )
+                  VALUES (?, ?, ?)
+                  ON CONFLICT(tienda_id, tipo_envase_id)
+                  DO UPDATE SET
+                    cantidad_vacios = cantidad_vacios + excluded.cantidad_vacios
+                  `,
+                  [tienda_id, envase.tipo_envase_id, cantidad],
+                  (errorInventarioEnvase) => {
+                    if (errorInventarioEnvase) {
+                      callback("Error al actualizar inventario de envases");
+                      return;
+                    }
+
+                    procesarEnvase(index + 1);
+                  }
+                );
+
+                return;
+              }
+
+              procesarEnvase(index + 1);
+            }
+          );
+        });
+      }
+    );
+  };
+
+  procesarEnvase(0);
+};
 const crearVenta = (req, res) => {
-  const { tienda_id, usuario_id, metodo_pago, productos, cliente_fiado_id } =
-    req.body;
+    const {
+    tienda_id,
+    usuario_id,
+    metodo_pago,
+    productos,
+    cliente_fiado_id,
+    envases,
+  } = req.body;
+
+  const envasesVenta = Array.isArray(envases) ? envases : [];
 
   if (metodo_pago === "fiado" && !cliente_fiado_id) {
     return res.status(400).json({
@@ -122,9 +370,81 @@ AND p.activo = 1
 LIMIT 1
         `,
         [tienda_id, producto_id],
-        (error, producto) => {
-          if (error) return rollback(res, "Error al buscar producto");
-          if (!producto) return rollback(res, "Producto no encontrado");
+            (error, producto) => {
+          if (error) {
+            return rollback(res, "Error al buscar producto");
+          }
+
+          if (!producto) {
+            return rollback(res, "Producto no encontrado");
+          }
+
+          const cantidadVenta = Number(cantidad);
+
+          if (!cantidadVenta || cantidadVenta <= 0) {
+            return rollback(res, `Cantidad inválida para ${producto.nombre}`);
+          }
+
+          const permiteDecimal =
+            producto.tipo_producto === "peso_variable" ||
+            Number(producto.es_derivado || 0) === 1;
+
+          if (!permiteDecimal && !Number.isInteger(cantidadVenta)) {
+            return rollback(
+              res,
+              `La cantidad de ${producto.nombre} debe ser una pieza completa`
+            );
+          }
+
+          if (Number(producto.es_retornable || 0) === 1) {
+            const envaseVenta = envasesVenta.find(
+              (envase) => Number(envase.producto_id) === Number(producto.id)
+            );
+
+            if (!envaseVenta) {
+              return rollback(
+                res,
+                `Selecciona el escenario de envase para ${producto.nombre}`
+              );
+            }
+
+            if (!escenariosEnvaseValidos.includes(envaseVenta.escenario)) {
+              return rollback(res, "Escenario de envase inválido");
+            }
+
+            if (
+              !envaseVenta.tipo_envase_id ||
+              Number(envaseVenta.tipo_envase_id) !== Number(producto.tipo_envase_id)
+            ) {
+              return rollback(
+                res,
+                `Tipo de envase inválido para ${producto.nombre}`
+              );
+            }
+
+            const cantidadEnvases = Number(envaseVenta.cantidad);
+
+            if (
+              !Number.isInteger(cantidadEnvases) ||
+              cantidadEnvases <= 0 ||
+              cantidadEnvases !== cantidadVenta
+            ) {
+              return rollback(
+                res,
+                `Cantidad de envases inválida para ${producto.nombre}`
+              );
+            }
+
+            if (
+              envaseVenta.escenario !== "trajo_envase" &&
+              !String(envaseVenta.cliente || "").trim()
+            ) {
+              return rollback(
+                res,
+                `Indica el cliente para el envase de ${producto.nombre}`
+              );
+            }
+          }
 
           db.get(
             `
@@ -298,16 +618,30 @@ db.get(
 
     const guardarDetalles = (ventaId, index) => {
       if (index >= detalles.length) {
-        db.run("COMMIT", (error) => {
-          if (error) return rollback(res, "Error al confirmar venta");
-
-          return res.status(201).json({
-            mensaje: "Venta registrada correctamente",
-            venta_id: ventaId,
+        registrarEnvasesVenta(
+          {
+            tienda_id,
+            usuario_id,
             folio,
-            total: subtotalVenta,
-          });
-        });
+            envases: envasesVenta,
+          },
+          (errorEnvases) => {
+            if (errorEnvases) {
+              return rollback(res, errorEnvases);
+            }
+
+            db.run("COMMIT", (error) => {
+              if (error) return rollback(res, "Error al confirmar venta");
+
+              return res.status(201).json({
+                mensaje: "Venta registrada correctamente",
+                venta_id: ventaId,
+                folio,
+                total: subtotalVenta,
+              });
+            });
+          }
+        );
 
         return;
       }

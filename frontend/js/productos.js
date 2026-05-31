@@ -25,14 +25,30 @@ const esDerivado = document.getElementById("esDerivado");
 const grupoDerivado = document.getElementById("grupoDerivado");
 const productoPadre = document.getElementById("productoPadre");
 const unidadesPorPadre = document.getElementById("unidadesPorPadre");
+const esRetornable = document.getElementById("esRetornable");
+const grupoRetornable = document.getElementById("grupoRetornable");
+const tipoEnvaseRetornable = document.getElementById("tipoEnvaseRetornable");
+
 
 let productoEditandoId = null;
 let productos = [];
+let tiposEnvase = [];
 
 btnGuardar.addEventListener("click", async () => {
   await guardarProducto();
 });
-cargarProductos();
+
+
+cargarTiposEnvase();
+
+esRetornable.addEventListener("change", () => {
+  if (esRetornable.checked) {
+    grupoRetornable.classList.remove("hidden");
+  } else {
+    grupoRetornable.classList.add("hidden");
+    tipoEnvaseRetornable.value = "";
+  }
+});
 
 esDerivado.addEventListener("change", () => {
   if (esDerivado.checked) {
@@ -63,6 +79,8 @@ async function guardarProducto() {
   esDerivado.checked
     ? 1 / Number(unidadesPorPadre.value)
     : 1,
+    es_retornable: esRetornable.checked ? 1 : 0,
+    tipo_envase_id: esRetornable.checked ? Number(tipoEnvaseRetornable.value) : null,
   };
 
   if (!body.nombre) {
@@ -108,6 +126,11 @@ async function guardarProducto() {
     return;
   }
 }
+
+  if (esRetornable.checked && !tipoEnvaseRetornable.value) {
+    mostrarMensaje("Selecciona el tipo de envase del producto retornable.");
+    return;
+  }
 
   try {
     const url = productoEditandoId
@@ -158,6 +181,9 @@ function limpiarFormulario() {
   precio.value = "";
   costoCompra.value = "";
   requiereCaducidad.checked = false;
+  esRetornable.checked = false;
+  tipoEnvaseRetornable.value = "";
+  grupoRetornable.classList.add("hidden");
 }
 
 function mostrarMensaje(texto) {
@@ -251,6 +277,15 @@ async function editarProducto(id) {
     precio.value = producto.precio_global;
     costoCompra.value = producto.costo_compra;
     requiereCaducidad.checked = producto.requiere_caducidad === 1;
+
+    esRetornable.checked = Number(producto.es_retornable || 0) === 1;
+    tipoEnvaseRetornable.value = producto.tipo_envase_id || "";
+
+    if (esRetornable.checked) {
+      grupoRetornable.classList.remove("hidden");
+    } else {
+      grupoRetornable.classList.add("hidden");
+    }
 
     btnGuardar.textContent = "Actualizar producto";
 
@@ -348,3 +383,35 @@ buscarProducto?.addEventListener("input", () => {
 
   renderProductos(filtrados);
 });
+
+async function cargarTiposEnvase() {
+  try {
+    const response = await fetch(`${API_URL}/importes/tipos-envase`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      mostrarMensaje(data.error || "Error al cargar tipos de envase.");
+      return;
+    }
+
+    tiposEnvase = data;
+
+    tipoEnvaseRetornable.innerHTML = `
+      <option value="">Selecciona tipo de envase...</option>
+    `;
+
+    tiposEnvase.forEach((tipo) => {
+      const option = document.createElement("option");
+      option.value = tipo.id;
+      option.textContent = `${tipo.categoria} - ${tipo.nombre} ($${Number(tipo.importe).toFixed(2)})`;
+      tipoEnvaseRetornable.appendChild(option);
+    });
+  } catch (error) {
+    mostrarMensaje("Error al cargar tipos de envase.");
+  }
+}

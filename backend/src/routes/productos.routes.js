@@ -37,7 +37,6 @@ router.get(
   verificarToken,
   obtenerProductoPorCodigo
 );
-module.exports = router;
 
 
 router.get(
@@ -65,3 +64,5 @@ router.post(
 );
 
 router.patch("/:id/desactivar", verificarToken, desactivarProducto);
+
+module.exports = router;

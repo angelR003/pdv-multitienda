@@ -107,16 +107,21 @@ async function registrarImporte() {
     observaciones: observaciones.value.trim(),
   };
 
-  if (
-    !body.cliente ||
-    !body.tipo_envase_id ||
-    !body.cantidad ||
-    body.cantidad <= 0
-  ) {
-    mostrarMensaje("Cliente, envase y cantidad son obligatorios.");
-    return;
-  }
+if (
+  !body.cliente ||
+  !body.tipo_envase_id ||
+  !body.escenario ||
+  !body.cantidad ||
+  body.cantidad <= 0
+) {
+  mostrarMensaje("Cliente, envase, escenario y cantidad son obligatorios.");
+  return;
+}
 
+if (!Number.isInteger(body.cantidad)) {
+  mostrarMensaje("La cantidad de envases debe ser un numero entero.");
+  return;
+}
   try {
     const response = await fetch(`${API_URL}/importes`, {
       method: "POST",
@@ -141,6 +146,7 @@ clienteOtro.value = "";
 clienteOtro.classList.add("hidden");
 cantidad.value = "";
 observaciones.value = "";
+escenario.value = "";
 
 await cargarImportes();
 await cargarInventarioEnvases();

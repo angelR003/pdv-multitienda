@@ -53,11 +53,17 @@ const nuevoDeudorApodo = document.getElementById("nuevoDeudorApodo");
 const nuevoDeudorTelefono = document.getElementById("nuevoDeudorTelefono");
 const nuevoDeudorLimite = document.getElementById("nuevoDeudorLimite");
 const btnProductoSuelto = document.getElementById("btnProductoSuelto");
+const modalEnvasesVenta = document.getElementById("modalEnvasesVenta");
+const listaEnvasesVenta = document.getElementById("listaEnvasesVenta");
+const btnConfirmarEnvasesVenta = document.getElementById("btnConfirmarEnvasesVenta");
+const btnCancelarEnvasesVenta = document.getElementById("btnCancelarEnvasesVenta");
 
 let clientesFiado = [];
 let carrito = [];
 let modoModalProducto = "peso";
 let promocionesActivas = [];
+let resolverEnvasesVenta = null;
+
 const usuarioId = usuario.id;
 
 usuarioNombre.textContent = usuario.nombre;
@@ -253,6 +259,8 @@ carrito.push({
   promocion_aplicada: false,
   texto_promocion: "",
   descuento_promocion: 0,
+  es_retornable: Number(producto.es_retornable || 0),
+  tipo_envase_id: producto.tipo_envase_id ? Number(producto.tipo_envase_id) : null,
 });
 
 recalcularCarrito();
@@ -275,6 +283,10 @@ function agregarAlCarrito(producto) {
 
   if (existente) {
     existente.cantidad += 1;
+    existente.es_retornable = Number(producto.es_retornable || existente.es_retornable || 0);
+    existente.tipo_envase_id = producto.tipo_envase_id
+      ? Number(producto.tipo_envase_id)
+      : existente.tipo_envase_id || null;
   } else {
     const precio = Number(producto.precio_aplicable || producto.precio_global);
 
@@ -288,6 +300,8 @@ function agregarAlCarrito(producto) {
       promocion_aplicada: false,
       texto_promocion: "",
       descuento_promocion: 0,
+      es_retornable: Number(producto.es_retornable || 0),
+      tipo_envase_id: producto.tipo_envase_id ? Number(producto.tipo_envase_id) : null,
     });
   }
 
@@ -308,6 +322,14 @@ function renderCarrito() {
     item.promocion_aplicada
       ? `<div class="text-xs text-cyan-300 font-bold mt-1">
           Promo: ${item.texto_promocion}
+        </div>`
+      : ""
+  }
+
+    ${
+    Number(item.es_retornable || 0) === 1
+      ? `<div class="text-xs text-lime-300 font-bold mt-1">
+          Retornable
         </div>`
       : ""
   }
@@ -388,6 +410,13 @@ async function cobrarVenta() {
     return;
   }
 
+    const envasesVenta = await pedirEnvasesVenta();
+
+  if (envasesVenta === null) {
+    mostrarMensaje("Venta cancelada. Falta confirmar envases.");
+    return;
+  }
+
   const body = {
     tienda_id: tiendaId,
     usuario_id: usuarioId,
@@ -400,6 +429,7 @@ async function cobrarVenta() {
       producto_id: item.producto_id,
       cantidad: item.cantidad,
     })),
+      envases: envasesVenta,
   };
 
   try {
@@ -735,3 +765,236 @@ function recalcularCarrito() {
     };
   });
 }
+
+
+function obtenerItemsRetornables() {
+  return carrito.filter(
+    (item) => Number(item.es_retornable || 0) === 1 && item.tipo_envase_id
+  );
+}
+
+function obtenerClienteFiadoSeleccionado() {
+  if (metodoPago.value !== "fiado") {
+    return null;
+  }
+
+  return clientesFiado.find(
+    (cliente) => Number(cliente.id) === Number(clienteFiado.value)
+  );
+}
+
+async function pedirEnvasesVenta() {
+  const retornables = obtenerItemsRetornables();
+
+  if (retornables.length === 0) {
+    return [];
+  }
+
+  await cargarClientesFiado();
+
+  listaEnvasesVenta.innerHTML = "";
+
+  const opcionesClientes = clientesFiado
+    .map(
+      (cliente) =>
+        `<option value="${cliente.id}">${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}</option>`
+    )
+    .join("");
+
+  retornables.forEach((item) => {
+    const div = document.createElement("div");
+    div.className = "bg-zinc-950 border border-zinc-800 rounded-2xl p-4";
+
+    div.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <h3 class="font-black text-lg">${item.nombre}</h3>
+          <p class="text-sm text-zinc-500">
+            Cantidad: ${item.cantidad} envase(s)
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-sm text-zinc-400 mb-2">
+            Escenario
+          </label>
+
+          <select
+            class="escenario-envase w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3"
+            data-producto-id="${item.producto_id}"
+          >
+            <option value="trajo_envase">Trajo envase</option>
+            <option value="dejo_importe">Dejó importe</option>
+            <option value="envase_prestado">Envase prestado</option>
+          </select>
+        </div>
+
+        <div class="cliente-envase-contenedor md:col-span-2 hidden" data-producto-id="${item.producto_id}">
+          <label class="block text-sm text-zinc-400 mb-2">
+            Cliente
+          </label>
+
+          <select
+            class="cliente-envase-select w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3"
+            data-producto-id="${item.producto_id}"
+          >
+            <option value="">Selecciona cliente...</option>
+            ${opcionesClientes}
+            <option value="otro">Otro / crear cliente</option>
+          </select>
+        </div>
+
+        <div class="cliente-envase-otro-contenedor md:col-span-2 hidden" data-producto-id="${item.producto_id}">
+          <label class="block text-sm text-zinc-400 mb-2">
+            Nombre del cliente
+          </label>
+
+          <input
+            class="cliente-envase-otro w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3"
+            data-producto-id="${item.producto_id}"
+            placeholder="Nombre del cliente..."
+          />
+        </div>
+      </div>
+    `;
+
+    listaEnvasesVenta.appendChild(div);
+  });
+
+  listaEnvasesVenta.querySelectorAll(".escenario-envase").forEach((select) => {
+    select.addEventListener("change", () => {
+      const productoId = select.dataset.productoId;
+
+      const contenedorCliente = listaEnvasesVenta.querySelector(
+        `.cliente-envase-contenedor[data-producto-id="${productoId}"]`
+      );
+
+      const contenedorOtro = listaEnvasesVenta.querySelector(
+        `.cliente-envase-otro-contenedor[data-producto-id="${productoId}"]`
+      );
+
+      const selectCliente = listaEnvasesVenta.querySelector(
+        `.cliente-envase-select[data-producto-id="${productoId}"]`
+      );
+
+      if (select.value === "trajo_envase") {
+        contenedorCliente.classList.add("hidden");
+        contenedorOtro.classList.add("hidden");
+        selectCliente.value = "";
+      } else {
+        contenedorCliente.classList.remove("hidden");
+      }
+    });
+  });
+
+  listaEnvasesVenta.querySelectorAll(".cliente-envase-select").forEach((select) => {
+    select.addEventListener("change", () => {
+      const productoId = select.dataset.productoId;
+      const contenedorOtro = listaEnvasesVenta.querySelector(
+        `.cliente-envase-otro-contenedor[data-producto-id="${productoId}"]`
+      );
+
+      if (select.value === "otro") {
+        contenedorOtro.classList.remove("hidden");
+      } else {
+        contenedorOtro.classList.add("hidden");
+      }
+    });
+  });
+
+  modalEnvasesVenta.classList.remove("hidden");
+  modalEnvasesVenta.classList.add("flex");
+
+  return new Promise((resolve) => {
+    resolverEnvasesVenta = resolve;
+  });
+}
+btnCancelarEnvasesVenta?.addEventListener("click", () => {
+  modalEnvasesVenta.classList.add("hidden");
+  modalEnvasesVenta.classList.remove("flex");
+
+  if (resolverEnvasesVenta) {
+    resolverEnvasesVenta(null);
+    resolverEnvasesVenta = null;
+  }
+});
+
+
+
+btnConfirmarEnvasesVenta?.addEventListener("click", () => {
+  const retornables = obtenerItemsRetornables();
+  const envases = [];
+
+  for (const item of retornables) {
+    const selectEscenario = listaEnvasesVenta.querySelector(
+      `.escenario-envase[data-producto-id="${item.producto_id}"]`
+    );
+
+    const selectCliente = listaEnvasesVenta.querySelector(
+      `.cliente-envase-select[data-producto-id="${item.producto_id}"]`
+    );
+
+    const inputClienteOtro = listaEnvasesVenta.querySelector(
+      `.cliente-envase-otro[data-producto-id="${item.producto_id}"]`
+    );
+
+    const escenario = selectEscenario?.value;
+
+    if (!escenario) {
+      mostrarMensaje(`Selecciona escenario para ${item.nombre}.`);
+      return;
+    }
+
+    let clienteFiadoId = null;
+    let clienteNombre = "Cliente mostrador";
+
+    if (escenario !== "trajo_envase") {
+      const clienteSeleccionado = selectCliente?.value || "";
+      const clienteOtro = inputClienteOtro?.value.trim() || "";
+
+      if (!clienteSeleccionado) {
+        mostrarMensaje(`Selecciona cliente para ${item.nombre}.`);
+        return;
+      }
+
+      if (clienteSeleccionado === "otro") {
+        if (!clienteOtro) {
+          mostrarMensaje(`Escribe el nombre del cliente para ${item.nombre}.`);
+          return;
+        }
+
+        clienteNombre = clienteOtro;
+      } else {
+        const cliente = clientesFiado.find(
+          (c) => Number(c.id) === Number(clienteSeleccionado)
+        );
+
+        if (!cliente) {
+          mostrarMensaje(`Cliente inválido para ${item.nombre}.`);
+          return;
+        }
+
+        clienteFiadoId = Number(cliente.id);
+        clienteNombre = cliente.nombre_completo;
+      }
+    }
+
+    envases.push({
+      producto_id: item.producto_id,
+      producto_nombre: item.nombre,
+      tipo_envase_id: item.tipo_envase_id,
+      escenario,
+      cantidad: Number(item.cantidad),
+      cliente: clienteNombre,
+      cliente_fiado_id: clienteFiadoId,
+    });
+  }
+
+  modalEnvasesVenta.classList.add("hidden");
+  modalEnvasesVenta.classList.remove("flex");
+
+  if (resolverEnvasesVenta) {
+    resolverEnvasesVenta(envases);
+    resolverEnvasesVenta = null;
+  }
+});

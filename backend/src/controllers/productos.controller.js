@@ -95,7 +95,9 @@ const crearProducto = (req, res) => {
     requiere_caducidad,
     es_derivado,
     producto_padre_id,
-    factor_conversion
+    factor_conversion,
+    es_retornable,
+    tipo_envase_id
   } = req.body;
 
   if (!tipo_producto || !nombre || !unidad || precio_global == null) {
@@ -116,6 +118,12 @@ const crearProducto = (req, res) => {
     });
   }
 
+    if (es_retornable && !tipo_envase_id) {
+    return res.status(400).json({
+      error: "Selecciona el tipo de envase para el producto retornable",
+    });
+  }
+
   const query = `
     INSERT INTO productos (
       tipo_producto,
@@ -130,9 +138,11 @@ const crearProducto = (req, res) => {
       requiere_caducidad,
       es_derivado,
       producto_padre_id,
-      factor_conversion
+      factor_conversion,
+      es_retornable,
+      tipo_envase_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.run(
@@ -150,7 +160,9 @@ const crearProducto = (req, res) => {
       requiere_caducidad ? 1 : 0,
       es_derivado || 0,
       producto_padre_id || null,
-      factor_conversion || 1
+      factor_conversion || 1,
+      es_retornable ? 1 : 0,
+      es_retornable ? Number(tipo_envase_id) : null
     ],
     function (error) {
       if (error) {
@@ -215,8 +227,16 @@ const actualizarProducto = (req, res) => {
     requiere_caducidad,
     es_derivado,
     producto_padre_id,
-    factor_conversion
+    factor_conversion,
+    es_retornable,
+    tipo_envase_id
   } = req.body;
+
+    if (es_retornable && !tipo_envase_id) {
+    return res.status(400).json({
+      error: "Selecciona el tipo de envase para el producto retornable",
+    });
+  }
 
 const query = `
   UPDATE productos
@@ -233,7 +253,9 @@ const query = `
     requiere_caducidad = ?,
     es_derivado = ?,
     producto_padre_id = ?,
-    factor_conversion = ?
+    factor_conversion = ?,
+    es_retornable = ?,
+    tipo_envase_id = ?
   WHERE id = ?
 `;
 
@@ -253,6 +275,8 @@ const query = `
   es_derivado || 0,
   producto_padre_id || null,
   factor_conversion || 1,
+  es_retornable ? 1 : 0,
+  es_retornable ? Number(tipo_envase_id) : null,
   id,
 ],
     function (error) {

@@ -8,6 +8,22 @@
     <title>Menu Principal - PDV Las gardenias</title>
     <link rel="stylesheet" href="./css/styles.css" />
 
+    <style>
+  @keyframes campana-tintineo {
+    0%, 100% { transform: rotate(0deg); }
+    15% { transform: rotate(14deg); }
+    30% { transform: rotate(-12deg); }
+    45% { transform: rotate(10deg); }
+    60% { transform: rotate(-8deg); }
+    75% { transform: rotate(5deg); }
+  }
+
+  .campana-activa {
+    animation: campana-tintineo 1.1s ease-in-out infinite;
+    transform-origin: top center;
+  }
+</style>
+
   </head>
 
   <body
@@ -39,9 +55,40 @@
         >
           <p class="text-zinc-400 text-sm">Sesión iniciada</p>
 
-          <p id="usuarioNombre" class="font-bold text-xl mt-1"></p>
+        <p id="usuarioNombre" class="font-bold text-xl mt-1"></p>
 
-          <p id="usuarioRol" class="text-green-400 text-sm mt-1"></p>
+<p id="usuarioRol" class="text-green-400 text-sm mt-1"></p>
+
+<div class="relative mt-4 flex justify-end">
+  <button
+    type="button"
+    id="btnNotificaciones"
+    class="relative w-14 h-14 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 flex items-center justify-center"
+    title="Notificaciones"
+  >
+    <span id="iconoCampana" class="text-3xl leading-none">&#128276;</span>
+
+    <span
+      id="contadorNotificaciones"
+      class="hidden absolute -top-2 -right-2 bg-red-500 text-white text-xs font-black rounded-full min-w-6 h-6 px-2 flex items-center justify-center"
+    >
+      0
+    </span>
+  </button>
+
+  <div
+    id="panelNotificaciones"
+    class="hidden absolute right-0 top-16 w-[380px] max-w-[85vw] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden z-50"
+  >
+    <div class="p-4 border-b border-zinc-800">
+      <h3 class="font-black text-lg">Notificaciones</h3>
+      <p class="text-zinc-500 text-sm">Traspasos pendientes por recibir.</p>
+    </div>
+
+    <div id="listaNotificaciones" class="max-h-96 overflow-y-auto"></div>
+  </div>
+</div>
+
       </div>
 
  
@@ -330,6 +377,42 @@
   <p class="text-xs text-red-300 mt-5">Disponible</p>
 </a>
 
+<a
+  id="cardTraspasos"
+  href="./traspasos.html"
+  class="group bg-zinc-900/70 border border-zinc-800 hover:border-cyan-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div class="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition">
+    &#8596;
+  </div>
+
+  <h2 class="text-2xl font-bold">Traspasos</h2>
+
+  <p class="text-zinc-400 mt-2">
+    Envia y recibe mercancia entre tiendas.
+  </p>
+
+  <p class="text-xs text-cyan-300 mt-5">Solo admin</p>
+</a>
+
+<a
+  id="cardReportes"
+  href="./reportes.html"
+  class="group bg-zinc-900/70 border border-zinc-800 hover:border-purple-400 rounded-3xl p-6 transition hover:-translate-y-1"
+>
+  <div class="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition">
+    &#9684;
+  </div>
+
+  <h2 class="text-2xl font-bold">Reportes</h2>
+
+  <p class="text-zinc-400 mt-2">
+    Graficas, ventas, productos y alertas.
+  </p>
+
+  <p class="text-xs text-purple-300 mt-5">Solo admin</p>
+</a>
+
 
 </a>
         <button
@@ -350,7 +433,7 @@
       </section>
 
       <footer class="mt-10 text-zinc-500 text-sm">
-        PDV Las Gardenias · Versión 1.1.6 en desarrollo
+        PDV Las Gardenias · Versión 1.1.7 en desarrollo
       </footer>
     </main>
 

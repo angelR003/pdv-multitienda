@@ -102,15 +102,15 @@ function renderInventario() {
       </td>
 
       <td class="p-3 text-xl font-bold">
-        ${formatearCantidad(item.cantidad_actual)} ${item.unidad}
+        ${formatearCantidad(item.cantidad_actual, item.unidad)} ${item.unidad}
       </td>
 
       <td class="p-3 text-zinc-300">
-        ${formatearCantidad(item.cantidad_minima)}
+        ${formatearCantidad(item.cantidad_minima, item.unidad)}
       </td>
 
       <td class="p-3 text-zinc-300">
-        ${formatearCantidad(item.cantidad_maxima)}
+        ${formatearCantidad(item.cantidad_maxima, item.unidad)}
       </td>
 
       <td class="p-3">
@@ -152,8 +152,14 @@ function renderInventario() {
   }
 }
 
-function formatearCantidad(valor) {
-  return Number(valor)
+function formatearCantidad(valor, unidad) {
+  const numero = Number(valor || 0);
+
+  if (unidad === "pieza") {
+    return String(Math.round(numero));
+  }
+
+  return numero
     .toFixed(3)
     .replace(/\.?0+$/, "");
 }

@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS productos (
   es_derivado INTEGER NOT NULL DEFAULT 0,
   producto_padre_id INTEGER,
   factor_conversion REAL NOT NULL DEFAULT 1,
+  es_retornable INTEGER NOT NULL DEFAULT 0,
+  tipo_envase_id INTEGER,
   fecha_creacion TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

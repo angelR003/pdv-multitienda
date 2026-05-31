@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <link rel="icon" type="image/x-icon" href="./assets/gardenia.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reportes - PDV Las Gardenias</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+
+  <body class="bg-zinc-950 text-white min-h-screen">
+    <main class="max-w-7xl mx-auto p-6">
+<header class="flex items-start justify-between gap-4 mb-8">
+  <div>
+    <h1 class="text-4xl font-black">Reportes</h1>
+    <p class="text-zinc-400 mt-2">
+      Ventas, productos, alertas y movimientos importantes.
+    </p>
+  </div>
+
+  <a
+    href="./dashboard.html"
+    class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm font-semibold leading-none"
+  >
+    Volver
+  </a>
+</header>
+
+      <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">
+              Tienda
+            </label>
+
+            <select
+              id="filtroTienda"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+            >
+              <option value="">Todas</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">
+              Fecha inicio
+            </label>
+
+            <input
+              id="fechaInicio"
+              type="date"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm text-zinc-400 mb-2">
+              Fecha fin
+            </label>
+
+            <input
+              id="fechaFin"
+              type="date"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+            />
+          </div>
+
+          <div class="flex items-end">
+            <button
+              type="button"
+              id="btnActualizar"
+              class="w-full bg-green-500 hover:bg-green-400 text-black font-black rounded-xl px-5 py-3"
+            >
+              Actualizar
+            </button>
+          </div>
+        </div>
+
+        <p id="mensaje" class="mt-4 text-sm text-zinc-400"></p>
+      </section>
+
+      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+          <p class="text-zinc-500 text-sm">Ventas totales</p>
+          <p id="cardVentasTotal" class="text-3xl font-black text-green-300 mt-2">$0.00</p>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+          <p class="text-zinc-500 text-sm">Ventas registradas</p>
+          <p id="cardTotalVentas" class="text-3xl font-black mt-2">0</p>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+          <p class="text-zinc-500 text-sm">Ticket promedio</p>
+          <p id="cardTicketPromedio" class="text-3xl font-black text-cyan-300 mt-2">$0.00</p>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+          <p class="text-zinc-500 text-sm">Devoluciones</p>
+          <p id="cardDevoluciones" class="text-3xl font-black text-red-300 mt-2">$0.00</p>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+        <div class="xl:col-span-2 bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <h2 class="text-2xl font-black mb-4">Ventas por día</h2>
+          <canvas id="graficaVentasDia" height="160"></canvas>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <h2 class="text-2xl font-black mb-4">Métodos de pago</h2>
+          <canvas id="graficaMetodosPago" height="220"></canvas>
+          <div id="leyendaMetodosPago" class="mt-4 space-y-2"></div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <h2 class="text-2xl font-black mb-4">Productos más vendidos</h2>
+          <canvas id="graficaTopProductos" height="260"></canvas>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <h2 class="text-2xl font-black mb-4">Indicadores críticos</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+              <p class="text-zinc-500 text-sm">Importes pendientes</p>
+              <p id="indicadorImportes" class="text-3xl font-black text-lime-300 mt-2">0</p>
+            </div>
+
+            <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+              <p class="text-zinc-500 text-sm">Envases pendientes</p>
+              <p id="indicadorEnvases" class="text-3xl font-black text-yellow-300 mt-2">0</p>
+            </div>
+
+            <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+              <p class="text-zinc-500 text-sm">Monto importes</p>
+              <p id="indicadorMontoImportes" class="text-3xl font-black text-orange-300 mt-2">$0.00</p>
+            </div>
+
+            <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+              <p class="text-zinc-500 text-sm">Traspasos pendientes</p>
+              <p id="indicadorTraspasos" class="text-3xl font-black text-sky-300 mt-2">0</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+          <div class="p-6 border-b border-zinc-800">
+            <h2 class="text-2xl font-black">Bajo inventario</h2>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="bg-zinc-800 text-zinc-300">
+                <tr>
+                  <th class="p-3">Producto</th>
+                  <th class="p-3">Tienda</th>
+                  <th class="p-3">Existencia</th>
+                  <th class="p-3">Mínimo</th>
+                </tr>
+              </thead>
+              <tbody id="tablaBajoInventario" class="divide-y divide-zinc-800"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+          <div class="p-6 border-b border-zinc-800">
+            <h2 class="text-2xl font-black">Fiados pendientes</h2>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="bg-zinc-800 text-zinc-300">
+                <tr>
+                  <th class="p-3">Cliente</th>
+                  <th class="p-3">Deuda</th>
+                </tr>
+              </thead>
+              <tbody id="tablaFiadosPendientes" class="divide-y divide-zinc-800"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./js/reportes.js"></script>
+  </body>
+</html>

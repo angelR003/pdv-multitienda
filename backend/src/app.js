@@ -10,6 +10,8 @@ require("./database/run-migrations");
 require("./database/migrar-importes-cliente-fiado");
 require("./database/migrar-promociones");
 require("./database/migrar-venta-detalles-promociones");
+require("./database/migrar-productos-retornables");
+require("./database/migrar-traspasos");
 
 const productosRoutes = require("./routes/productos.routes");
 const ventasRoutes = require("./routes/ventas.routes");
@@ -26,6 +28,8 @@ const usuariosRoutes = require("./routes/usuarios.routes");
 const importesRoutes = require("./routes/importes.routes");
 const fiadosRoutes = require("./routes/fiados.routes");
 const promocionesRoutes = require("./routes/promociones.routes");
+const traspasosRoutes = require("./routes/traspasos.routes");
+const reportesRoutes = require("./routes/reportes.routes");
 
 const app = express();
 
@@ -48,6 +52,8 @@ app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/importes", importesRoutes);
 app.use("/api/fiados", fiadosRoutes);
 app.use("/api/promociones", promocionesRoutes);
+app.use("/api/traspasos", traspasosRoutes);
+app.use("/api/reportes", reportesRoutes);
 
 app.get("/", (req, res) => {
   res.json({

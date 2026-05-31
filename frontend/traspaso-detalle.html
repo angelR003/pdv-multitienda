@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <link rel="icon" type="image/x-icon" href="./assets/gardenia.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detalle traspaso - PDV Las Gardenias</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+
+  <body class="bg-zinc-950 text-white min-h-screen">
+    <main class="max-w-6xl mx-auto p-6">
+      <header class="flex items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 id="tituloTraspaso" class="text-4xl font-black">
+            Traspaso
+          </h1>
+
+          <p id="subtituloTraspaso" class="text-zinc-400 mt-2"></p>
+        </div>
+
+        <a
+          href="./traspasos.html"
+          class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl"
+        >
+          Volver
+        </a>
+      </header>
+
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <p class="text-zinc-500 text-sm">Origen</p>
+          <p id="tiendaOrigen" class="text-2xl font-black mt-1"></p>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <p class="text-zinc-500 text-sm">Destino</p>
+          <p id="tiendaDestino" class="text-2xl font-black mt-1"></p>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <p class="text-zinc-500 text-sm">Enviado por</p>
+          <p id="usuarioEnvio" class="text-xl font-bold mt-1"></p>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <p class="text-zinc-500 text-sm">Estado</p>
+          <p id="estadoTraspaso" class="text-xl font-bold mt-1"></p>
+        </div>
+      </section>
+
+      <section class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+        <div class="p-6 border-b border-zinc-800">
+          <h2 class="text-2xl font-black">Productos enviados</h2>
+          <p id="motivoTraspaso" class="text-zinc-400 mt-2"></p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead class="bg-zinc-800 text-zinc-300">
+              <tr>
+                <th class="p-3">Producto</th>
+                <th class="p-3">Tipo</th>
+                <th class="p-3">Cantidad</th>
+                <th class="p-3">Código</th>
+              </tr>
+            </thead>
+
+            <tbody id="tablaDetalles" class="divide-y divide-zinc-800"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="accionesTraspaso" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <button
+          type="button"
+          id="btnRecibir"
+          class="bg-green-500 hover:bg-green-400 text-black font-black rounded-xl py-4 text-xl"
+        >
+          Confirmar recibido
+        </button>
+
+        <button
+          type="button"
+          id="btnCancelar"
+          class="bg-red-500 hover:bg-red-400 text-black font-black rounded-xl py-4 text-xl"
+        >
+          Cancelar traspaso
+        </button>
+      </section>
+
+      <p id="mensaje" class="mt-5 text-sm text-zinc-400"></p>
+    </main>
+
+    <script src="./js/traspaso-detalle.js"></script>
+  </body>
+</html>
