@@ -15,6 +15,10 @@ if (!token || !usuario) {
 
 const producto = document.getElementById("producto");
 const cantidadNueva = document.getElementById("cantidadNueva");
+const labelCantidadNueva = document.getElementById("labelCantidadNueva");
+const grupoPiezasSueltas = document.getElementById("grupoPiezasSueltas");
+const piezasSueltas = document.getElementById("piezasSueltas");
+const labelPiezasSueltas = document.getElementById("labelPiezasSueltas");
 const motivo = document.getElementById("motivo");
 const observaciones = document.getElementById("observaciones");
 
@@ -24,9 +28,13 @@ const mensaje = document.getElementById("mensaje");
 
 const tablaAjustes = document.getElementById("tablaAjustes");
 
+let productos = [];
+
 btnAjustar.addEventListener("click", async () => {
   await realizarAjuste();
 });
+
+producto.addEventListener("change", actualizarCampoCantidad);
 
 cargarProductos();
 cargarAjustes();
@@ -39,7 +47,7 @@ async function cargarProductos() {
       },
     });
 
-    const productos = await response.json();
+    productos = await response.json();
 
     producto.innerHTML = "";
 
@@ -47,12 +55,23 @@ async function cargarProductos() {
       const option = document.createElement("option");
 
       option.value = item.id;
+      option.dataset.factorConversionDerivado = item.factor_conversion_derivado || "";
+      option.dataset.presentacion = item.presentacion || "";
+      option.dataset.unidad = item.unidad || "";
+      option.dataset.esDerivado = item.es_derivado || 0;
 
-      option.textContent =
-        `${item.nombre} (${item.unidad})`;
+      const unidadesPorPaquete = obtenerUnidadesPorPaquete(item);
+      const nombreUnidad =
+        unidadesPorPaquete > 1 && Number(item.es_derivado || 0) === 0
+          ? item.presentacion || item.unidad
+          : item.unidad;
+
+      option.textContent = `${item.nombre} (${nombreUnidad})`;
 
       producto.appendChild(option);
     });
+
+    actualizarCampoCantidad();
 
   } catch (error) {
     mostrarMensaje("Error al cargar productos.");
@@ -60,11 +79,24 @@ async function cargarProductos() {
 }
 
 async function realizarAjuste() {
+  const productoSeleccionado = obtenerProductoSeleccionado();
+
+  if (!productoSeleccionado) {
+    mostrarMensaje("Selecciona un producto.");
+    return;
+  }
+
+  const cantidadCalculada = calcularCantidadDesdeFormulario(productoSeleccionado);
+
+  if (cantidadCalculada === null) {
+    return;
+  }
+
   const body = {
     tienda_id: tiendaId,
     usuario_id: usuario.id,
     producto_id: Number(producto.value),
-    cantidad_nueva: Number(cantidadNueva.value),
+    cantidad_nueva: cantidadCalculada,
     motivo: motivo.value.trim(),
     observaciones: observaciones.value.trim(),
   };
@@ -102,6 +134,7 @@ async function realizarAjuste() {
     mostrarMensaje("Ajuste realizado correctamente.");
 
     cantidadNueva.value = "";
+    piezasSueltas.value = "";
     motivo.value = "";
     observaciones.value = "";
 
@@ -172,4 +205,98 @@ async function cargarAjustes() {
 
 function mostrarMensaje(texto) {
   mensaje.textContent = texto;
+}
+
+function obtenerProductoSeleccionado() {
+  return productos.find(
+    (item) => Number(item.id) === Number(producto.value)
+  );
+}
+
+function actualizarCampoCantidad() {
+  const productoSeleccionado = obtenerProductoSeleccionado();
+
+  if (!productoSeleccionado) return;
+
+  const unidadesPorPaquete = obtenerUnidadesPorPaquete(productoSeleccionado);
+
+  if (unidadesPorPaquete > 1 && Number(productoSeleccionado.es_derivado || 0) === 0) {
+    const nombrePaquete = productoSeleccionado.presentacion || productoSeleccionado.unidad;
+    labelCantidadNueva.textContent = `${pluralizar(capitalizar(nombrePaquete))} ${terminacionCerrado(nombrePaquete)}`;
+    cantidadNueva.placeholder = `Ejemplo: 1`;
+    grupoPiezasSueltas.classList.remove("hidden");
+    labelPiezasSueltas.textContent = `Piezas sueltas (0 a ${unidadesPorPaquete - 1})`;
+    piezasSueltas.max = String(unidadesPorPaquete - 1);
+    return;
+  }
+
+  grupoPiezasSueltas.classList.add("hidden");
+  piezasSueltas.value = "";
+  labelCantidadNueva.textContent = "Nueva cantidad";
+  cantidadNueva.placeholder = "Nueva cantidad...";
+}
+
+function calcularCantidadDesdeFormulario(productoSeleccionado) {
+  const unidadesPorPaquete = obtenerUnidadesPorPaquete(productoSeleccionado);
+  const paquetes = Number(cantidadNueva.value || 0);
+
+  if (unidadesPorPaquete > 1 && Number(productoSeleccionado.es_derivado || 0) === 0) {
+    const piezas = Number(piezasSueltas.value || 0);
+
+    if (!Number.isInteger(paquetes) || paquetes < 0) {
+      mostrarMensaje("La cantidad de paquetes debe ser entera.");
+      return null;
+    }
+
+    if (!Number.isInteger(piezas) || piezas < 0 || piezas >= unidadesPorPaquete) {
+      mostrarMensaje(`Las piezas sueltas deben estar entre 0 y ${unidadesPorPaquete - 1}.`);
+      return null;
+    }
+
+    if (paquetes === 0 && piezas === 0) {
+      mostrarMensaje("La cantidad nueva no puede quedar vacia.");
+      return null;
+    }
+
+    return paquetes + piezas / unidadesPorPaquete;
+  }
+
+  const cantidad = Number(cantidadNueva.value);
+
+  if (isNaN(cantidad) || cantidad < 0) {
+    mostrarMensaje("Datos invalidos.");
+    return null;
+  }
+
+  return cantidad;
+}
+
+function obtenerUnidadesPorPaquete(item) {
+  const factor = Number(item.factor_conversion_derivado || 0);
+
+  if (!factor || factor <= 0 || factor >= 1) {
+    return 0;
+  }
+
+  return Math.round(1 / factor);
+}
+
+function capitalizar(texto) {
+  if (!texto) {
+    return "Paquete";
+  }
+
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+function pluralizar(texto) {
+  if (texto.endsWith("s")) {
+    return texto;
+  }
+
+  return `${texto}s`;
+}
+
+function terminacionCerrado(texto) {
+  return String(texto || "").toLowerCase().endsWith("a") ? "cerradas" : "cerrados";
 }

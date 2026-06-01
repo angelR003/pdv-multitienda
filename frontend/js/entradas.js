@@ -15,6 +15,9 @@ if (!tiendaId) {
 
 const producto = document.getElementById("producto");
 const cantidad = document.getElementById("cantidad");
+const grupoPiezasSueltas = document.getElementById("grupoPiezasSueltas");
+const piezasSueltas = document.getElementById("piezasSueltas");
+const labelPiezasSueltas = document.getElementById("labelPiezasSueltas");
 const proveedor = document.getElementById("proveedor");
 const costoUnitario = document.getElementById("costoUnitario");
 const observaciones = document.getElementById("observaciones");
@@ -63,10 +66,27 @@ function actualizarCampoCantidad() {
   if (productoSeleccionado.unidad === "kg") {
     cantidad.placeholder = "Cantidad EN GRAMOS. Ejemplo: 1000 = 1 kg";
     cantidad.title = "Este producto se registra en gramos y el sistema lo convierte a kg.";
-  } else {
-    cantidad.placeholder = "Cantidad EN PIEZAS. Ejemplo: 12";
-    cantidad.title = "Este producto se registra por piezas.";
+    grupoPiezasSueltas.classList.add("hidden");
+    piezasSueltas.value = "";
+    return;
   }
+
+  const unidadesPorPaquete = obtenerUnidadesPorPaquete(productoSeleccionado);
+
+  if (unidadesPorPaquete > 1 && Number(productoSeleccionado.es_derivado || 0) === 0) {
+    const nombrePaquete = productoSeleccionado.presentacion || productoSeleccionado.unidad;
+    cantidad.placeholder = `Cantidad de ${nombrePaquete}s cerrados. Ejemplo: 1`;
+    cantidad.title = `Registra paquetes cerrados y piezas sueltas por separado. Este producto trae ${unidadesPorPaquete} piezas por ${nombrePaquete}.`;
+    grupoPiezasSueltas.classList.remove("hidden");
+    labelPiezasSueltas.textContent = `Piezas sueltas (0 a ${unidadesPorPaquete - 1})`;
+    piezasSueltas.max = String(unidadesPorPaquete - 1);
+    return;
+  }
+
+  grupoPiezasSueltas.classList.add("hidden");
+  piezasSueltas.value = "";
+  cantidad.placeholder = "Cantidad EN PIEZAS. Ejemplo: 12";
+  cantidad.title = "Este producto se registra por piezas.";
 }
 
 async function registrarEntrada() {
@@ -77,15 +97,38 @@ async function registrarEntrada() {
     return;
   }
 
-  let cantidadFinal = Number(cantidad.value);
-
-  if (!cantidadFinal || cantidadFinal <= 0) {
-    mostrarMensaje("La cantidad es obligatoria.");
-    return;
-  }
+  let cantidadFinal = Number(cantidad.value || 0);
+  const unidadesPorPaquete = obtenerUnidadesPorPaquete(productoSeleccionado);
 
   if (productoSeleccionado.unidad === "kg") {
+    if (!cantidadFinal || cantidadFinal <= 0) {
+      mostrarMensaje("La cantidad es obligatoria.");
+      return;
+    }
+
     cantidadFinal = cantidadFinal / 1000;
+  } else if (unidadesPorPaquete > 1 && Number(productoSeleccionado.es_derivado || 0) === 0) {
+    const piezas = Number(piezasSueltas.value || 0);
+
+    if (!Number.isInteger(cantidadFinal) || cantidadFinal < 0) {
+      mostrarMensaje("La cantidad de paquetes debe ser entera.");
+      return;
+    }
+
+    if (!Number.isInteger(piezas) || piezas < 0 || piezas >= unidadesPorPaquete) {
+      mostrarMensaje(`Las piezas sueltas deben estar entre 0 y ${unidadesPorPaquete - 1}.`);
+      return;
+    }
+
+    if (cantidadFinal === 0 && piezas === 0) {
+      mostrarMensaje("La cantidad es obligatoria.");
+      return;
+    }
+
+    cantidadFinal += piezas / unidadesPorPaquete;
+  } else if (!cantidadFinal || cantidadFinal <= 0) {
+    mostrarMensaje("La cantidad es obligatoria.");
+    return;
   }
 
   const body = {
@@ -128,6 +171,7 @@ async function registrarEntrada() {
 
 function limpiarFormulario() {
   cantidad.value = "";
+  piezasSueltas.value = "";
   proveedor.value = "";
   costoUnitario.value = "";
   observaciones.value = "";
@@ -153,6 +197,16 @@ function renderSelectProductos(lista) {
   });
 
   actualizarCampoCantidad();
+}
+
+function obtenerUnidadesPorPaquete(item) {
+  const factor = Number(item.factor_conversion_derivado || 0);
+
+  if (!factor || factor <= 0 || factor >= 1) {
+    return 0;
+  }
+
+  return Math.round(1 / factor);
 }
 
 const buscarProductoEntrada = document.getElementById("buscarProductoEntrada");

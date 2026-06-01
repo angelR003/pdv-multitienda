@@ -337,14 +337,19 @@ const crearVenta = (req, res) => {
   const folio = `V-${Date.now()}`;
 
   db.serialize(() => {
-    db.run("BEGIN TRANSACTION");
+    db.run("BEGIN IMMEDIATE TRANSACTION", (errorTransaccion) => {
+      if (errorTransaccion) {
+        return res.status(409).json({
+          error: "Hay otra venta en proceso. Intenta de nuevo.",
+        });
+      }
 
     let subtotalVenta = 0;
     const detalles = [];
 
     const procesarProducto = (index) => {
       if (index >= productos.length) {
-        guardarVenta();
+        validarInventarioAgrupado();
         return;
       }
 
@@ -560,6 +565,61 @@ db.get(
       );
     };
 
+    const validarInventarioAgrupado = () => {
+      const requeridos = new Map();
+
+      detalles.forEach((detalle) => {
+        const productoInventarioId = Number(detalle.producto_inventario_id);
+        const previo = requeridos.get(productoInventarioId) || {
+          cantidad: 0,
+          nombre: detalle.nombre_producto,
+        };
+
+        previo.cantidad += Number(detalle.cantidad_inventario);
+        requeridos.set(productoInventarioId, previo);
+      });
+
+      const pendientes = Array.from(requeridos.entries());
+
+      const revisar = (index) => {
+        if (index >= pendientes.length) {
+          guardarVenta();
+          return;
+        }
+
+        const [productoInventarioId, requerido] = pendientes[index];
+
+        db.get(
+          `
+          SELECT cantidad_actual
+          FROM inventario
+          WHERE tienda_id = ?
+          AND producto_id = ?
+          `,
+          [tienda_id, productoInventarioId],
+          (errorInventario, inventario) => {
+            if (errorInventario) {
+              return rollback(res, "Error al consultar inventario");
+            }
+
+            if (
+              !inventario ||
+              Number(inventario.cantidad_actual) < Number(requerido.cantidad)
+            ) {
+              return rollback(
+                res,
+                `Inventario insuficiente para ${requerido.nombre}`
+              );
+            }
+
+            revisar(index + 1);
+          }
+        );
+      };
+
+      revisar(0);
+    };
+
     const guardarVenta = () => {
       db.run(
         `
@@ -586,12 +646,14 @@ db.get(
           if (error) return rollback(res, "Error al guardar venta");
 
           const ventaId = this.lastID;
+          const continuarGuardandoDetalles = () => guardarDetalles(ventaId, 0);
+
           if (metodo_pago === "fiado") {
             const conceptoFiado = productos
               .map((item) => `${item.cantidad} ${item.nombre || "producto"}`)
               .join(", ");
 
-            db.run(
+            return db.run(
               `
     INSERT INTO fiados (
       cliente_id,
@@ -609,9 +671,17 @@ db.get(
                 conceptoFiado,
                 subtotalVenta,
               ],
+              (errorFiado) => {
+                if (errorFiado) {
+                  return rollback(res, "Error al registrar fiado");
+                }
+
+                continuarGuardandoDetalles();
+              }
             );
           }
-          guardarDetalles(ventaId, 0);
+
+          continuarGuardandoDetalles();
         },
       );
     };
@@ -694,15 +764,24 @@ SET cantidad_actual = cantidad_actual - ?,
     ultima_actualizacion = CURRENT_TIMESTAMP
 WHERE tienda_id = ?
 AND producto_id = ?
+AND cantidad_actual >= ?
 `,
             [
               detalle.cantidad_inventario,
               tienda_id,
               detalle.producto_inventario_id,
+              detalle.cantidad_inventario,
             ],
-            (errorInventario) => {
+            function (errorInventario) {
               if (errorInventario)
                 return rollback(res, "Error al descontar inventario");
+
+              if (this.changes === 0) {
+                return rollback(
+                  res,
+                  `Inventario insuficiente para ${detalle.nombre_producto}`
+                );
+              }
 
               guardarDetalles(ventaId, index + 1);
             },
@@ -712,6 +791,7 @@ AND producto_id = ?
     };
 
     procesarProducto(0);
+    });
   });
 };
 

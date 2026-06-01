@@ -57,12 +57,15 @@ const modalEnvasesVenta = document.getElementById("modalEnvasesVenta");
 const listaEnvasesVenta = document.getElementById("listaEnvasesVenta");
 const btnConfirmarEnvasesVenta = document.getElementById("btnConfirmarEnvasesVenta");
 const btnCancelarEnvasesVenta = document.getElementById("btnCancelarEnvasesVenta");
+const tituloModalManual = document.getElementById("tituloModalManual");
+const labelCantidadManual = document.getElementById("labelCantidadManual");
 
 let clientesFiado = [];
 let carrito = [];
 let modoModalProducto = "peso";
 let promocionesActivas = [];
 let resolverEnvasesVenta = null;
+let ventaEnProceso = false;
 
 const usuarioId = usuario.id;
 
@@ -103,6 +106,9 @@ pagoCon.addEventListener("change", calcularCambio);
 
 btnProductoManual.addEventListener("click", async () => {
   modoModalProducto = "peso";
+  tituloModalManual.textContent = "Producto a granel";
+labelCantidadManual.textContent = "Cantidad / gramos";
+manualCantidad.step = "0.001";
   modalManual.classList.remove("hidden");
   modalManual.classList.add("flex");
   manualCantidad.placeholder = "Ejemplo: 250 gramos";
@@ -139,6 +145,9 @@ clienteFiado.addEventListener("change", () => {
 
 btnProductoSuelto.addEventListener("click", async () => {
   modoModalProducto = "suelto";
+  tituloModalManual.textContent = "Producto suelto";
+labelCantidadManual.textContent = "Cantidad / piezas";
+manualCantidad.step = "1";
   modalManual.classList.remove("hidden");
   modalManual.classList.add("flex");
   manualCantidad.placeholder = "Ejemplo: 1 pieza";
@@ -210,8 +219,10 @@ async function cargarProductosManuales(modo = "peso") {
       option.value = producto.id;
       option.textContent = `${producto.nombre} - $${Number(producto.precio_global).toFixed(2)}/${producto.unidad}`;
 
-      option.dataset.precio = producto.precio_global;
-      option.dataset.nombre = producto.nombre;
+option.dataset.precio = producto.precio_global;
+option.dataset.nombre = producto.nombre;
+option.dataset.esRetornable = producto.es_retornable || 0;
+option.dataset.tipoEnvaseId = producto.tipo_envase_id || "";
 
       manualProducto.appendChild(option);
     });
@@ -239,6 +250,10 @@ function agregarProductoManual() {
     mostrarMensaje("Cantidad inválida.");
     return;
   }
+  if (modoModalProducto === "suelto" && !Number.isInteger(cantidad)) {
+  mostrarMensaje("La cantidad de producto suelto debe ser entera.");
+  return;
+}
 
   if (modoModalProducto === "peso") {
     cantidad = cantidad / 1000;
@@ -259,8 +274,10 @@ carrito.push({
   promocion_aplicada: false,
   texto_promocion: "",
   descuento_promocion: 0,
-  es_retornable: Number(producto.es_retornable || 0),
-  tipo_envase_id: producto.tipo_envase_id ? Number(producto.tipo_envase_id) : null,
+  es_retornable: Number(option.dataset.esRetornable || 0),
+  tipo_envase_id: option.dataset.tipoEnvaseId
+    ? Number(option.dataset.tipoEnvaseId)
+    : null,
 });
 
 recalcularCarrito();
@@ -405,6 +422,10 @@ renderCarrito();
 }
 
 async function cobrarVenta() {
+  if (ventaEnProceso) {
+    return;
+  }
+
   if (carrito.length === 0) {
     mostrarMensaje("No hay productos en la venta.");
     return;
@@ -433,6 +454,10 @@ async function cobrarVenta() {
   };
 
   try {
+    ventaEnProceso = true;
+    btnCobrar.disabled = true;
+    btnCobrar.classList.add("opacity-60", "cursor-not-allowed");
+
     if (metodoPago.value === "fiado" && !clienteFiado.value) {
       mostrarMensaje("Selecciona el cliente para fiado.");
       return;
@@ -489,6 +514,10 @@ async function cobrarVenta() {
     codigoInput.focus();
   } catch (error) {
     mostrarMensaje("Error al conectar con el servidor.");
+  } finally {
+    ventaEnProceso = false;
+    btnCobrar.disabled = false;
+    btnCobrar.classList.remove("opacity-60", "cursor-not-allowed");
   }
 }
 

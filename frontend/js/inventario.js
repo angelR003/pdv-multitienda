@@ -102,15 +102,15 @@ function renderInventario() {
       </td>
 
       <td class="p-3 text-xl font-bold">
-        ${formatearCantidad(item.cantidad_actual, item.unidad)} ${item.unidad}
+        ${formatearExistencia(item, item.cantidad_actual)}
       </td>
 
       <td class="p-3 text-zinc-300">
-        ${formatearCantidad(item.cantidad_minima, item.unidad)}
+        ${formatearExistencia(item, item.cantidad_minima)}
       </td>
 
       <td class="p-3 text-zinc-300">
-        ${formatearCantidad(item.cantidad_maxima, item.unidad)}
+        ${formatearExistencia(item, item.cantidad_maxima)}
       </td>
 
       <td class="p-3">
@@ -152,16 +152,62 @@ function renderInventario() {
   }
 }
 
-function formatearCantidad(valor, unidad) {
+function formatearExistencia(item, valor) {
   const numero = Number(valor || 0);
+  const unidadesPorPaquete = obtenerUnidadesPorPaquete(item);
 
-  if (unidad === "pieza") {
-    return String(Math.round(numero));
+  if (unidadesPorPaquete > 1 && Number(item.es_derivado || 0) === 0) {
+    const paquetes = Math.floor(numero + 0.000001);
+    const restanteDecimal = Math.max(0, numero - paquetes);
+    let piezas = Math.round(restanteDecimal * unidadesPorPaquete);
+    let paquetesAjustados = paquetes;
+
+    if (piezas === unidadesPorPaquete) {
+      paquetesAjustados += 1;
+      piezas = 0;
+    }
+
+    const nombrePaquete = item.presentacion || item.unidad || "paquete";
+    const nombrePieza = item.unidad_derivada || "pieza";
+
+    if (piezas === 0) {
+      return `${paquetesAjustados} ${pluralizar(nombrePaquete, paquetesAjustados)}`;
+    }
+
+    return `${paquetesAjustados} ${pluralizar(nombrePaquete, paquetesAjustados)} + ${piezas} ${pluralizar(nombrePieza, piezas)}`;
   }
 
-  return numero
-    .toFixed(3)
-    .replace(/\.?0+$/, "");
+  return `${formatearNumeroSinMentir(numero)} ${item.unidad}`;
+}
+
+function obtenerUnidadesPorPaquete(item) {
+  const factor = Number(item.factor_conversion_derivado || 0);
+
+  if (!factor || factor <= 0 || factor >= 1) {
+    return 0;
+  }
+
+  return Math.round(1 / factor);
+}
+
+function formatearNumeroSinMentir(numero) {
+  if (Number.isInteger(numero)) {
+    return String(numero);
+  }
+
+  return numero.toFixed(3).replace(/\.?0+$/, "");
+}
+
+function pluralizar(texto, cantidad) {
+  if (cantidad === 1) {
+    return texto;
+  }
+
+  if (texto.endsWith("s")) {
+    return texto;
+  }
+
+  return `${texto}s`;
 }
 
 function mostrarMensaje(texto) {

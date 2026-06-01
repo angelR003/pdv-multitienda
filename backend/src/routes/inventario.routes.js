@@ -23,13 +23,31 @@ router.get("/tienda/:tiendaId", (req, res) => {
       p.nombre AS producto,
       p.codigo_barras,
       p.tipo_producto,
+      p.presentacion,
       p.unidad,
+      p.es_derivado,
+      p.producto_padre_id,
+      p.factor_conversion,
+      d.factor_conversion_derivado,
+      d.producto_derivado_nombre,
+      d.unidad_derivada,
       i.cantidad_actual,
       i.cantidad_minima,
       i.cantidad_maxima
     FROM inventario i
     INNER JOIN productos p ON p.id = i.producto_id
     INNER JOIN tiendas t ON t.id = i.tienda_id
+    LEFT JOIN (
+      SELECT
+        producto_padre_id,
+        MIN(factor_conversion) AS factor_conversion_derivado,
+        MAX(nombre) AS producto_derivado_nombre,
+        MAX(unidad) AS unidad_derivada
+      FROM productos
+      WHERE activo = 1
+      AND es_derivado = 1
+      GROUP BY producto_padre_id
+    ) d ON d.producto_padre_id = p.id
     WHERE i.tienda_id = ?
     ORDER BY p.nombre ASC
   `;

@@ -40,6 +40,7 @@ btnGuardar.addEventListener("click", async () => {
 
 
 cargarTiposEnvase();
+cargarProductos();
 
 esRetornable.addEventListener("change", () => {
   if (esRetornable.checked) {
@@ -198,8 +199,24 @@ async function cargarProductos() {
       },
     });
 
-  productos = await response.json();
-  renderProductos(productos);
+    const data = await response.json();
+
+    if (!response.ok) {
+      productos = [];
+      renderProductos(productos);
+      mostrarMensaje(data.error || "Error al cargar productos.");
+      return;
+    }
+
+    if (!Array.isArray(data)) {
+      productos = [];
+      renderProductos(productos);
+      mostrarMensaje("La respuesta de productos no es valida.");
+      return;
+    }
+
+    productos = data;
+    renderProductos(productos);
   } catch (error) {
     mostrarMensaje("Error al cargar productos.");
   }
@@ -207,6 +224,17 @@ async function cargarProductos() {
 
 function renderProductos(lista) {
   tablaProductos.innerHTML = "";
+
+  if (!lista.length) {
+    tablaProductos.innerHTML = `
+      <tr>
+        <td colspan="6" class="p-6 text-center text-zinc-500">
+          No hay productos registrados.
+        </td>
+      </tr>
+    `;
+    return;
+  }
 
   lista.forEach((producto) => {
     const tr = document.createElement("tr");

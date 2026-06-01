@@ -52,7 +52,7 @@
         </div>
 
         <div>
-          <label class="block text-sm text-zinc-400 mb-2">
+          <label id="labelCantidadNueva" class="block text-sm text-zinc-400 mb-2">
             Nueva cantidad
           </label>
 
@@ -62,6 +62,21 @@
             step="0.001"
             class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
             placeholder="Nueva cantidad..."
+          />
+        </div>
+
+        <div id="grupoPiezasSueltas" class="hidden">
+          <label id="labelPiezasSueltas" class="block text-sm text-zinc-400 mb-2">
+            Piezas sueltas
+          </label>
+
+          <input
+            id="piezasSueltas"
+            type="number"
+            min="0"
+            step="1"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+            placeholder="Ejemplo: 5"
           />
         </div>
 
