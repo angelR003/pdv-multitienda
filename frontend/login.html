@@ -1,71 +1,181 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <link rel="icon" type="image/x-icon" href="./assets/gardenia.png">
+  <link rel="icon" type="image/x-icon" href="./assets/gardenia.png">
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Login - PDV Las Gardenias</title>
 
-   <link rel="stylesheet" href="./css/styles.css">
+  <link rel="stylesheet" href="./css/styles.css">
 </head>
 
-<body class="bg-zinc-950 min-h-screen flex items-center justify-center text-white">
-
-  <div class="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-
-    <div class="mb-8 text-center">
-      <h1 class="text-4xl font-bold">PDV Las Gardenias</h1>
-      <p class="text-zinc-400 mt-2">
-        Iniciar sesión
-      </p>
+<body class="min-h-screen bg-zinc-950 text-white">
+  <main class="relative min-h-screen overflow-hidden">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(34,197,94,0.18),transparent_32%),linear-gradient(135deg,rgba(3,7,18,0.96),rgba(9,9,11,0.91)_48%,rgba(20,83,45,0.28))]"></div>
+      <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent"></div>
+      <div class="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-emerald-950/20 to-transparent"></div>
+      <div class="absolute inset-y-0 right-0 hidden w-1/2 lg:block">
+        <img
+          src="./assets/gardenia.png"
+          alt="Gardenia"
+          class="h-full w-full object-cover opacity-30 mix-blend-screen"
+        />
+        <div class="absolute inset-0 bg-gradient-to-l from-zinc-950/20 via-zinc-950/70 to-zinc-950"></div>
+      </div>
     </div>
 
-    <div class="space-y-5">
+    <section class="relative z-10 grid min-h-screen grid-cols-1 lg:grid-cols-[1.05fr_0.95fr]">
+      <div class="flex min-h-[42vh] items-end px-6 pb-8 pt-10 sm:px-10 lg:min-h-screen lg:items-center lg:px-16">
+        <div class="max-w-2xl">
+          <div class="mb-10 flex items-center gap-4">
+            <div class="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[1.7rem] border border-emerald-300/40 bg-zinc-950/70 shadow-2xl shadow-emerald-950/30">
+              <img
+                src="./assets/gardenia.png"
+                alt="Las Gardenias"
+                class="h-full w-full object-cover"
+              />
+            </div>
 
-      <div>
-        <label class="block text-sm text-zinc-400 mb-2">
-          Usuario
-        </label>
+            <div>
+              <div class="inline-flex items-center gap-3 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-200">
+                <span class="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.95)]"></span>
+                Sistema local activo
+              </div>
 
-        <input
-          id="username"
-          type="text"
-          class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
-          placeholder="Usuario"
-        />
+              <p class="mt-3 text-sm font-semibold uppercase tracking-normal text-zinc-500">
+                Terminal de mostrador
+              </p>
+            </div>
+          </div>
+
+          <h1 class="text-5xl font-black leading-none tracking-normal text-white sm:text-6xl lg:text-7xl">
+            PDV Las Gardenias
+          </h1>
+
+          <p class="mt-6 max-w-xl text-lg leading-8 text-zinc-300">
+            Control de ventas.
+          </p>
+
+          <div class="mt-10 flex max-w-xl items-center gap-4 border-l-4 border-emerald-400 pl-5">
+            <p class="text-xl font-black text-white">
+              Turno listo para vender.
+            </p>
+            <span class="hidden h-px flex-1 bg-gradient-to-r from-emerald-400/70 to-transparent sm:block"></span>
+          </div>
+
+          <p class="mt-4 max-w-lg text-sm leading-6 text-zinc-500">
+            Acceso privado para ventas, caja e inventario de Las Gardenias.
+          </p>
+        </div>
       </div>
 
-      <div>
-        <label class="block text-sm text-zinc-400 mb-2">
-          Contraseña
-        </label>
+      <div class="flex items-center justify-center px-6 pb-10 sm:px-10 lg:px-16 lg:py-12">
+        <div class="w-full max-w-md overflow-hidden rounded-[2rem] border border-zinc-800 bg-zinc-900/86 shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div class="border-b border-zinc-800 bg-zinc-950/60 p-6">
+            <div class="flex items-center gap-4">
+              <div class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-emerald-400/40 bg-emerald-400/10 shadow-lg shadow-emerald-950/30">
+                <img
+                  src="./assets/gardenia.png"
+                  alt="Las Gardenias"
+                  class="h-full w-full object-cover"
+                />
+              </div>
 
-        <input
-          id="password"
-          type="password"
-          class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
-          placeholder="Contraseña"
-        />
+              <div>
+                <p class="text-sm font-bold text-emerald-300">Acceso seguro</p>
+                <h2 class="text-2xl font-black text-white">Iniciar sesion</h2>
+              </div>
+            </div>
+
+            <div class="mt-6 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
+              <p class="text-sm font-semibold text-zinc-300">
+                Bienvenido de vuelta
+              </p>
+              <p class="mt-1 text-xs text-zinc-500">
+                Ingresa tus credenciales para abrir el panel principal.
+              </p>
+            </div>
+          </div>
+
+          <div class="space-y-5 p-6 sm:p-8">
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-zinc-300">
+                Usuario
+              </label>
+
+              <input
+                id="username"
+                type="text"
+                autocomplete="username"
+                class="w-full rounded-2xl border border-zinc-700 bg-zinc-950/95 px-4 py-4 text-white outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10"
+                placeholder="Usuario"
+              />
+            </div>
+
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-zinc-300">
+                Contrasena
+              </label>
+
+              <div class="relative">
+                <input
+                  id="password"
+                  type="password"
+                  autocomplete="current-password"
+                  class="w-full rounded-2xl border border-zinc-700 bg-zinc-950/95 py-4 pl-4 pr-14 text-white outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10"
+                  placeholder="Contrasena"
+                />
+
+                <button
+                  id="btnTogglePassword"
+                  type="button"
+                  class="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+                  title="Mostrar contrasena"
+                  aria-label="Mostrar contrasena"
+                >
+                  <svg
+                    id="iconPasswordEye"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="h-5 w-5"
+                  >
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <button
+              id="btnLogin"
+              class="w-full rounded-2xl bg-emerald-500 px-5 py-4 text-lg font-black text-black shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-400 active:scale-[0.99]"
+            >
+              Entrar
+            </button>
+
+            <p
+              id="mensaje"
+              class="min-h-5 text-center text-sm font-semibold text-zinc-400"
+            ></p>
+
+            <div class="border-t border-zinc-800 pt-5 text-center">
+              <p class="text-xs font-semibold uppercase tracking-normal text-zinc-600">
+                PDV Las Gardenias
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <button
-        id="btnLogin"
-        class="w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-xl text-lg"
-      >
-        Entrar
-      </button>
-
-      <p
-        id="mensaje"
-        class="text-center text-sm text-zinc-400"
-      ></p>
-
-    </div>
-
-  </div>
+    </section>
+  </main>
 
   <script src="./js/login.js"></script>
-
 </body>
 </html>
