@@ -1,5 +1,154 @@
 const db = require("../database/connection");
 
+const cancelarEnvasesPendientesPorDevolucion = (
+  { venta, tiendaId, usuarioId, detalles },
+  callback
+) => {
+  const folio = venta?.folio;
+
+  if (!folio || !Array.isArray(detalles) || detalles.length === 0) {
+    callback();
+    return;
+  }
+
+  const prefijoObservacion = `Venta ${folio} - `;
+  const cantidadesPorProducto = new Map();
+
+  detalles.forEach((detalle) => {
+    const nombre = String(detalle.nombre_producto || "").trim();
+    const cantidad = Number(detalle.cantidad);
+
+    if (!nombre || cantidad <= 0) {
+      return;
+    }
+
+    cantidadesPorProducto.set(
+      nombre,
+      (cantidadesPorProducto.get(nombre) || 0) + cantidad
+    );
+  });
+
+  if (cantidadesPorProducto.size === 0) {
+    callback();
+    return;
+  }
+
+  db.all(
+    `
+    SELECT *
+    FROM importes_envases
+    WHERE tienda_id = ?
+    AND estado = 'pendiente'
+    AND cantidad_pendiente > 0
+    AND observaciones LIKE ?
+    ORDER BY id
+    `,
+    [tiendaId, `${prefijoObservacion}%`],
+    (errorImportes, importes) => {
+      if (errorImportes) {
+        callback(errorImportes);
+        return;
+      }
+
+      const procesarImporte = (index) => {
+        if (index >= importes.length) {
+          callback();
+          return;
+        }
+
+        const importe = importes[index];
+        const productoNombre = String(importe.observaciones || "").replace(
+          prefijoObservacion,
+          ""
+        );
+        const cantidadDisponible = cantidadesPorProducto.get(productoNombre) || 0;
+
+        if (cantidadDisponible <= 0) {
+          procesarImporte(index + 1);
+          return;
+        }
+
+        const cantidadCancelar = Math.min(
+          Number(importe.cantidad_pendiente),
+          cantidadDisponible
+        );
+        const nuevaCantidadPendiente =
+          Number(importe.cantidad_pendiente) - cantidadCancelar;
+        const nuevoEstado =
+          nuevaCantidadPendiente <= 0 ? "completado" : "pendiente";
+
+        cantidadesPorProducto.set(
+          productoNombre,
+          cantidadDisponible - cantidadCancelar
+        );
+
+        db.run(
+          `
+          UPDATE importes_envases
+          SET
+            cantidad_pendiente = ?,
+            estado = ?
+          WHERE id = ?
+          `,
+          [nuevaCantidadPendiente, nuevoEstado, importe.id],
+          (errorUpdate) => {
+            if (errorUpdate) {
+              callback(errorUpdate);
+              return;
+            }
+
+            const montoCancelar =
+              cantidadCancelar * Number(importe.importe_unitario || 0);
+
+            if (importe.escenario === "envase_prestado") {
+              procesarImporte(index + 1);
+              return;
+            }
+
+            if (importe.escenario === "dejo_importe" && montoCancelar > 0) {
+              db.run(
+                `
+                INSERT INTO movimientos_caja (
+                  tienda_id,
+                  usuario_id,
+                  tipo_movimiento,
+                  monto,
+                  concepto,
+                  observaciones
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                `,
+                [
+                  tiendaId,
+                  usuarioId,
+                  "salida_dinero",
+                  montoCancelar,
+                  "Cancelacion importe por devolucion",
+                  importe.cliente,
+                ],
+                (errorCaja) => {
+                  if (errorCaja) {
+                    callback(errorCaja);
+                    return;
+                  }
+
+                  procesarImporte(index + 1);
+                }
+              );
+
+              return;
+            }
+
+            procesarImporte(index + 1);
+          }
+        );
+      };
+
+      procesarImporte(0);
+    }
+  );
+};
+
 const registrarDevolucion = (req, res) => {
   const {
     venta_id,
@@ -126,11 +275,30 @@ const registrarDevolucion = (req, res) => {
                   });
                 }
 
-                res.status(201).json({
-                  mensaje: "Devolución realizada correctamente",
-                  devolucion_id: this.lastID,
-                  total_devuelto: venta.total,
-                });
+                const devolucionId = this.lastID;
+
+                cancelarEnvasesPendientesPorDevolucion(
+                  {
+                    venta,
+                    tiendaId: tienda_id,
+                    usuarioId: usuario_id,
+                    detalles,
+                  },
+                  (errorEnvases) => {
+                    if (errorEnvases) {
+                      return res.status(500).json({
+                        error: "Error al cancelar envases pendientes",
+                        detalle: errorEnvases.message,
+                      });
+                    }
+
+                    res.status(201).json({
+                      mensaje: "Devolución realizada correctamente",
+                      devolucion_id: devolucionId,
+                      total_devuelto: venta.total,
+                    });
+                  }
+                );
               }
             );
           });
@@ -230,11 +398,15 @@ const registrarDevolucionRenglon = (req, res) => {
 
   db.get(
     `
-    SELECT *
-    FROM venta_detalles
-    WHERE id = ?
-    AND venta_id = ?
-    AND producto_id = ?
+    SELECT
+      vd.*,
+      v.folio AS folio_venta
+    FROM venta_detalles vd
+    INNER JOIN ventas v
+      ON v.id = vd.venta_id
+    WHERE vd.id = ?
+    AND vd.venta_id = ?
+    AND vd.producto_id = ?
     `,
     [venta_detalle_id, venta_id, producto_id],
     (errorDetalle, detalle) => {
@@ -378,22 +550,45 @@ actualizarEstadoVentaPorDevolucion(
       });
     }
 
-    db.run("COMMIT", (errorCommit) => {
-      if (errorCommit) {
-        db.run("ROLLBACK");
-        return res.status(500).json({
-          error: "Error al confirmar devolución",
-          detalle: errorCommit.message,
+    cancelarEnvasesPendientesPorDevolucion(
+      {
+        venta: { folio: detalle.folio_venta },
+        tiendaId: tienda_id,
+        usuarioId: usuario_id,
+        detalles: [
+          {
+            ...detalle,
+            cantidad: cantidadDevuelta,
+          },
+        ],
+      },
+      (errorEnvases) => {
+        if (errorEnvases) {
+          db.run("ROLLBACK");
+          return res.status(500).json({
+            error: "Error al cancelar envases pendientes",
+            detalle: errorEnvases.message,
+          });
+        }
+
+        db.run("COMMIT", (errorCommit) => {
+          if (errorCommit) {
+            db.run("ROLLBACK");
+            return res.status(500).json({
+              error: "Error al confirmar devolución",
+              detalle: errorCommit.message,
+            });
+          }
+
+          return res.status(201).json({
+            mensaje: "Producto devuelto correctamente",
+            devolucion_id: devolucionId,
+            total_devuelto: totalDevuelto,
+            estado_venta: nuevoEstadoVenta,
+          });
         });
       }
-
-      return res.status(201).json({
-        mensaje: "Producto devuelto correctamente",
-        devolucion_id: devolucionId,
-        total_devuelto: totalDevuelto,
-        estado_venta: nuevoEstadoVenta,
-      });
-    });
+    );
   }
 );
                       }

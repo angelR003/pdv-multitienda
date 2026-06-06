@@ -53,23 +53,29 @@ async function cargarClientes() {
     });
 
     clientes = await response.json();
-
     contenedorClientes.innerHTML = "";
 
     clientes.forEach((cliente) => {
       const deuda = Number(cliente.deuda_total || 0);
+      const envasesPendientes = Number(cliente.envases_pendientes || 0);
+      const envasesHistorial = Number(cliente.envases_historial || 0);
       const limite = Number(cliente.limite_credito || 0);
       const restante = limite - deuda;
 
       let borde = "border-green-500/40";
       let estado = "SANO";
 
+      if (envasesPendientes > 0 || envasesHistorial > 0) {
+        borde = "border-yellow-400";
+        estado = "ENVASES";
+      }
+
       if (limite > 0 && deuda >= limite) {
         borde = "border-red-500";
-        estado = "LÍMITE EXCEDIDO";
+        estado = "LIMITE EXCEDIDO";
       } else if (limite > 0 && restante <= 100) {
         borde = "border-yellow-400";
-        estado = "CERCA DEL LÍMITE";
+        estado = "CERCA DEL LIMITE";
       }
 
       const card = document.createElement("button");
@@ -81,20 +87,29 @@ async function cargarClientes() {
         <p class="text-zinc-400">${cliente.apodo || "Sin apodo"}</p>
 
         <div class="mt-5">
-          <p class="text-zinc-400 text-sm">Debe</p>
+          <p class="text-zinc-400 text-sm">Debe dinero</p>
           <p class="text-3xl font-black text-red-300">$${deuda.toFixed(2)}</p>
         </div>
 
+        ${
+          envasesPendientes > 0 || envasesHistorial > 0
+            ? `
+              <div class="mt-3 rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-3 py-2">
+                <p class="text-xs font-bold text-yellow-300">Envases</p>
+                <p class="text-sm text-zinc-300">${envasesPendientes} pendiente(s)</p>
+              </div>
+            `
+            : ""
+        }
+
         <div class="mt-3 text-sm text-zinc-400">
-          Límite: $${limite.toFixed(2)}
+          Limite: $${limite.toFixed(2)}
         </div>
       `;
 
       card.addEventListener("click", () => seleccionarCliente(cliente));
-
       contenedorClientes.appendChild(card);
     });
-
   } catch (error) {
     mostrarMensaje("Error al cargar clientes.");
   }
@@ -137,7 +152,6 @@ async function crearCliente() {
 
     mostrarMensaje("Cliente creado correctamente.");
     cargarClientes();
-
   } catch (error) {
     mostrarMensaje("Error al conectar.");
   }
@@ -147,13 +161,14 @@ function seleccionarCliente(cliente) {
   clienteSeleccionado = cliente;
 
   const deuda = Number(cliente.deuda_total || 0);
+  const envasesPendientes = Number(cliente.envases_pendientes || 0);
   const limite = Number(cliente.limite_credito || 0);
 
   detalleCliente.classList.remove("hidden");
   detalleTitulo.textContent = cliente.nombre_completo;
 
   detalleInfo.textContent =
-    `Debe $${deuda.toFixed(2)} de límite $${limite.toFixed(2)}. Tel: ${cliente.telefono || "-"}`;
+    `Debe dinero $${deuda.toFixed(2)} de limite $${limite.toFixed(2)}. Envases pendientes: ${envasesPendientes}. Tel: ${cliente.telefono || "-"}`;
 
   cargarHistorial(cliente.id);
 }
@@ -167,25 +182,25 @@ async function cargarHistorial(clienteId) {
     });
 
     const data = await response.json();
-
     tablaHistorial.innerHTML = "";
 
     data.forEach((item) => {
       const esAbono = item.tipo === "abono";
-
+      const esEnvase =
+        item.tipo === "envase_prestado" || item.tipo === "envase_devuelto";
       const tr = document.createElement("tr");
 
       tr.innerHTML = `
-        <td class="p-3 font-bold ${esAbono ? "text-green-400" : "text-red-400"}">
-          ${esAbono ? "ABONO" : "DEUDA"}
+        <td class="p-3 font-bold ${esEnvase ? "text-yellow-300" : esAbono ? "text-green-400" : "text-red-400"}">
+          ${obtenerEtiquetaHistorial(item.tipo)}
         </td>
 
         <td class="p-3">
           ${item.concepto || "-"}
         </td>
 
-        <td class="p-3 font-black ${esAbono ? "text-green-400" : "text-red-400"}">
-          ${esAbono ? "-" : "+"}$${Number(item.monto).toFixed(2)}
+        <td class="p-3 font-black ${esEnvase ? "text-zinc-500" : esAbono ? "text-green-400" : "text-red-400"}">
+          ${esEnvase ? "No monetario" : `${esAbono ? "-" : "+"}$${Number(item.monto).toFixed(2)}`}
         </td>
 
         <td class="p-3 text-zinc-400">
@@ -199,10 +214,17 @@ async function cargarHistorial(clienteId) {
 
       tablaHistorial.appendChild(tr);
     });
-
   } catch (error) {
     mostrarMensaje("Error al cargar historial.");
   }
+}
+
+function obtenerEtiquetaHistorial(tipo) {
+  if (tipo === "abono") return "ABONO";
+  if (tipo === "envase_prestado") return "ENVASE PRESTADO";
+  if (tipo === "envase_devuelto") return "ENVASE DEVUELTO";
+
+  return "DEUDA";
 }
 
 async function registrarFiado() {
@@ -223,7 +245,7 @@ async function registrarFiado() {
   const limite = Number(clienteSeleccionado.limite_credito || 0);
 
   if (limite > 0 && deudaActual + monto > limite && usuario.rol !== "administrador") {
-    alert("Este cliente excede su límite. Se requiere autorización de administrador.");
+    alert("Este cliente excede su limite. Se requiere autorizacion de administrador.");
     return;
   }
 
@@ -258,7 +280,6 @@ async function registrarFiado() {
 
     const actualizado = clientes.find((c) => c.id === clienteSeleccionado.id);
     if (actualizado) seleccionarCliente(actualizado);
-
   } catch (error) {
     mostrarMensaje("Error al conectar.");
   }
@@ -273,7 +294,7 @@ async function registrarAbono() {
   const monto = Number(montoAbono.value);
 
   if (!monto || monto <= 0) {
-    mostrarMensaje("Monto inválido.");
+    mostrarMensaje("Monto invalido.");
     return;
   }
 
@@ -308,7 +329,6 @@ async function registrarAbono() {
 
     const actualizado = clientes.find((c) => c.id === clienteSeleccionado.id);
     if (actualizado) seleccionarCliente(actualizado);
-
   } catch (error) {
     mostrarMensaje("Error al conectar.");
   }
@@ -322,11 +342,7 @@ function formatearFechaLocal(fecha) {
   if (!fecha) return "-";
 
   const fechaTexto = String(fecha);
-
-  const fechaISO = fechaTexto.includes("T")
-    ? fechaTexto
-    : fechaTexto.replace(" ", "T") + "Z";
-
+  const fechaISO = normalizarFechaSQLite(fechaTexto);
   const date = new Date(fechaISO);
 
   if (isNaN(date.getTime())) return fechaTexto;
@@ -339,6 +355,14 @@ function formatearFechaLocal(fecha) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false
+    hour12: false,
   });
+}
+
+function normalizarFechaSQLite(fechaTexto) {
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(fechaTexto)) {
+    return fechaTexto;
+  }
+
+  return fechaTexto.replace(" ", "T") + "Z";
 }

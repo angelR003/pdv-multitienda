@@ -66,6 +66,7 @@ let modoModalProducto = "peso";
 let promocionesActivas = [];
 let resolverEnvasesVenta = null;
 let ventaEnProceso = false;
+const redondeoOperativo = window.RedondeoOperativo;
 
 const usuarioId = usuario.id;
 
@@ -221,6 +222,8 @@ async function cargarProductosManuales(modo = "peso") {
 
 option.dataset.precio = producto.precio_global;
 option.dataset.nombre = producto.nombre;
+option.dataset.tipoProducto = producto.tipo_producto;
+option.dataset.unidad = producto.unidad || "";
 option.dataset.esRetornable = producto.es_retornable || 0;
 option.dataset.tipoEnvaseId = producto.tipo_envase_id || "";
 
@@ -259,10 +262,14 @@ function agregarProductoManual() {
     cantidad = cantidad / 1000;
   }
 
-  const subtotal =
-    modoModalProducto === "peso"
-      ? redondearAMedioPeso(cantidad * precio)
-      : cantidad * precio;
+  const datosProducto = {
+    tipo_producto:
+      option.dataset.tipoProducto ||
+      (modoModalProducto === "peso" ? "peso_variable" : "manual"),
+    unidad: option.dataset.unidad || (modoModalProducto === "peso" ? "kg" : "pieza"),
+  };
+
+  const subtotal = calcularSubtotalOperativo(datosProducto, cantidad * precio);
 
 carrito.push({
   producto_id,
@@ -270,6 +277,8 @@ carrito.push({
   cantidad,
   precio_unitario: precio,
   precio_unitario_original: precio,
+  tipo_producto: datosProducto.tipo_producto,
+  unidad: datosProducto.unidad,
   subtotal,
   promocion_aplicada: false,
   texto_promocion: "",
@@ -313,6 +322,8 @@ function agregarAlCarrito(producto) {
       cantidad: 1,
       precio_unitario: precio,
       precio_unitario_original: precio,
+      tipo_producto: producto.tipo_producto,
+      unidad: producto.unidad,
       subtotal: precio,
       promocion_aplicada: false,
       texto_promocion: "",
@@ -526,7 +537,15 @@ function mostrarMensaje(texto) {
 }
 
 function redondearAMedioPeso(monto) {
-  return Math.round(monto * 2) / 2;
+  return redondeoOperativo.redondearAMedioPeso(monto);
+}
+
+function esProductoAGranel(producto) {
+  return redondeoOperativo.esProductoAGranel(producto);
+}
+
+function calcularSubtotalOperativo(producto, subtotalBase) {
+  return redondeoOperativo.calcularSubtotalOperativo(producto, subtotalBase);
 }
 
 function cerrarSesion() {
@@ -727,6 +746,17 @@ function calcularPrecioConPromocion(item) {
 
   const cantidad = Number(item.cantidad || 0);
   const precioNormal = Number(item.precio_unitario_original || item.precio_unitario || 0);
+
+  if (esProductoAGranel(item)) {
+    return {
+      subtotal: calcularSubtotalOperativo(item, cantidad * precioNormal),
+      precioUnitarioFinal: precioNormal,
+      promocionAplicada: false,
+      cantidadPromocionAplicada: 0,
+      descuentoPromocion: 0,
+      textoPromocion: "",
+    };
+  }
 
   if (!promocion) {
     return {

@@ -31,6 +31,10 @@ let inventarioEditandoId = null;
 
 let inventario = [];
 
+if (new URLSearchParams(window.location.search).get("filtro") === "bajo") {
+  filtroEstado.value = "bajo";
+}
+
 cargarInventario();
 
 buscador.addEventListener("input", renderInventario);

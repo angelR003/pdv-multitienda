@@ -344,14 +344,29 @@ async function verAccesos(id, nombre) {
 }
 
 function formatearFechaLocal(fecha) {
-  return new Date(fecha.replace(" ", "T") + "Z")
-    .toLocaleString("es-MX", {
-      timeZone: "America/Mexico_City",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+  if (!fecha) return "-";
+
+  const fechaTexto = String(fecha);
+  const fechaISO = normalizarFechaSQLite(fechaTexto);
+  const date = new Date(fechaISO);
+
+  if (isNaN(date.getTime())) return fechaTexto;
+
+  return date.toLocaleString("es-MX", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function normalizarFechaSQLite(fechaTexto) {
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(fechaTexto)) {
+    return fechaTexto;
+  }
+
+  return fechaTexto.replace(" ", "T") + "Z";
 }

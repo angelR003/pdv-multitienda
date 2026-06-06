@@ -22,6 +22,7 @@ const observaciones = document.getElementById("observaciones");
 const btnRegistrar = document.getElementById("btnRegistrar");
 const mensaje = document.getElementById("mensaje");
 const tablaImportes = document.getElementById("tablaImportes");
+const thTiendaImportes = document.getElementById("thTiendaImportes");
 const contenedorEnvases = document.getElementById("contenedorEnvases");
 const modalDevolverEnvase = document.getElementById("modalDevolverEnvase");
 const cantidadDevolverEnvase = document.getElementById("cantidadDevolverEnvase");
@@ -34,6 +35,11 @@ let devolucionEnvasePendiente = null;
 let tiposEnvase = [];
 let devolucionEnProceso = false;
 let clientesFiado = [];
+const mostrarTodasLasTiendas = usuario.rol === "administrador";
+
+if (mostrarTodasLasTiendas) {
+  thTiendaImportes?.classList.remove("hidden");
+}
 
 clienteFiado.addEventListener("change", () => {
   if (clienteFiado.value === "otro") {
@@ -164,7 +170,15 @@ function mostrarMensaje(texto) {
 
 async function cargarImportes() {
   try {
-    const response = await fetch(`${API_URL}/importes?tienda_id=${tiendaId}`, {
+    const params = new URLSearchParams();
+
+    if (mostrarTodasLasTiendas) {
+      params.set("todas", "1");
+    } else {
+      params.set("tienda_id", tiendaId);
+    }
+
+    const response = await fetch(`${API_URL}/importes?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -179,6 +193,11 @@ async function cargarImportes() {
 
       tr.innerHTML = `
         <td class="p-3 font-semibold">${item.cliente}</td>
+        ${
+          mostrarTodasLasTiendas
+            ? `<td class="p-3 text-zinc-400">${item.tienda || "-"}</td>`
+            : ""
+        }
         <td class="p-3">${item.tipo_envase}</td>
         <td class="p-3 text-zinc-400">${item.escenario}</td>
         <td class="p-3 font-bold">${item.cantidad_pendiente}</td>

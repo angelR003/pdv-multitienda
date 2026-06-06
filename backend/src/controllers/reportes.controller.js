@@ -2,17 +2,14 @@ const db = require("../database/connection");
 
 function normalizarFiltros(req) {
   const hoy = new Date();
-  const hace7Dias = new Date();
-
-  hace7Dias.setDate(hoy.getDate() - 6);
 
   const fechaInicio =
     req.query.fecha_inicio ||
-    hace7Dias.toISOString().slice(0, 10);
+    formatearFechaLocal(hoy);
 
   const fechaFin =
     req.query.fecha_fin ||
-    hoy.toISOString().slice(0, 10);
+    formatearFechaLocal(hoy);
 
   const tiendaId = req.query.tienda_id
     ? Number(req.query.tienda_id)
@@ -22,9 +19,15 @@ function normalizarFiltros(req) {
     fechaInicio,
     fechaFin,
     tiendaId,
-    inicioSql: `${fechaInicio} 00:00:00`,
-    finSql: `${fechaFin} 23:59:59`,
   };
+}
+
+function formatearFechaLocal(fecha) {
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, "0");
+  const day = String(fecha.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function filtroTienda(alias, tiendaId, params) {
@@ -32,6 +35,10 @@ function filtroTienda(alias, tiendaId, params) {
 
   params.push(tiendaId);
   return ` AND ${alias}.tienda_id = ? `;
+}
+
+function fechaLocalSql(alias, columna) {
+  return `DATE(datetime(${alias}.${columna}, 'localtime'))`;
 }
 
 function all(query, params = []) {
@@ -82,20 +89,21 @@ const obtenerTiendas = (req, res) => {
 };
 
 async function consultarVentasPorDia(filtros) {
-  const params = [filtros.inicioSql, filtros.finSql];
+  const fechaVentaLocal = fechaLocalSql("v", "fecha_venta");
+  const params = [filtros.fechaInicio, filtros.fechaFin];
   const tiendaSql = filtroTienda("v", filtros.tiendaId, params);
 
   return all(
     `
     SELECT
-      DATE(v.fecha_venta) AS fecha,
+      ${fechaVentaLocal} AS fecha,
       COUNT(*) AS total_ventas,
       COALESCE(SUM(v.total), 0) AS total
     FROM ventas v
-    WHERE v.fecha_venta BETWEEN ? AND ?
+    WHERE ${fechaVentaLocal} BETWEEN ? AND ?
     AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
     ${tiendaSql}
-    GROUP BY DATE(v.fecha_venta)
+    GROUP BY ${fechaVentaLocal}
     ORDER BY fecha ASC
     `,
     params
@@ -103,7 +111,8 @@ async function consultarVentasPorDia(filtros) {
 }
 
 async function consultarMetodosPago(filtros) {
-  const params = [filtros.inicioSql, filtros.finSql];
+  const fechaVentaLocal = fechaLocalSql("v", "fecha_venta");
+  const params = [filtros.fechaInicio, filtros.fechaFin];
   const tiendaSql = filtroTienda("v", filtros.tiendaId, params);
 
   return all(
@@ -113,7 +122,7 @@ async function consultarMetodosPago(filtros) {
       COUNT(*) AS total_ventas,
       COALESCE(SUM(v.total), 0) AS total
     FROM ventas v
-    WHERE v.fecha_venta BETWEEN ? AND ?
+    WHERE ${fechaVentaLocal} BETWEEN ? AND ?
     AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
     ${tiendaSql}
     GROUP BY v.metodo_pago
@@ -124,7 +133,8 @@ async function consultarMetodosPago(filtros) {
 }
 
 async function consultarTopProductos(filtros) {
-  const params = [filtros.inicioSql, filtros.finSql];
+  const fechaVentaLocal = fechaLocalSql("v", "fecha_venta");
+  const params = [filtros.fechaInicio, filtros.fechaFin];
   const tiendaSql = filtroTienda("v", filtros.tiendaId, params);
 
   return all(
@@ -137,7 +147,7 @@ async function consultarTopProductos(filtros) {
       COALESCE(SUM(vd.subtotal), 0) AS total_vendido
     FROM venta_detalles vd
     INNER JOIN ventas v ON v.id = vd.venta_id
-    WHERE v.fecha_venta BETWEEN ? AND ?
+    WHERE ${fechaVentaLocal} BETWEEN ? AND ?
     AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
     ${tiendaSql}
     GROUP BY vd.producto_id, vd.nombre_producto, vd.unidad
@@ -149,7 +159,8 @@ async function consultarTopProductos(filtros) {
 }
 
 async function consultarPromocionesUsadas(filtros) {
-  const params = [filtros.inicioSql, filtros.finSql];
+  const fechaVentaLocal = fechaLocalSql("v", "fecha_venta");
+  const params = [filtros.fechaInicio, filtros.fechaFin];
   const tiendaSql = filtroTienda("v", filtros.tiendaId, params);
 
   return all(
@@ -161,7 +172,7 @@ async function consultarPromocionesUsadas(filtros) {
       COALESCE(SUM(vd.descuento_promocion), 0) AS ahorro_total
     FROM venta_detalles vd
     INNER JOIN ventas v ON v.id = vd.venta_id
-    WHERE v.fecha_venta BETWEEN ? AND ?
+    WHERE ${fechaVentaLocal} BETWEEN ? AND ?
     AND vd.promocion_id IS NOT NULL
     ${tiendaSql}
     GROUP BY vd.producto_id, vd.nombre_producto
@@ -173,7 +184,9 @@ async function consultarPromocionesUsadas(filtros) {
 }
 
 async function consultarResumen(filtros) {
-  const paramsVentas = [filtros.inicioSql, filtros.finSql];
+  const fechaVentaLocal = fechaLocalSql("v", "fecha_venta");
+  const fechaDevolucionLocal = fechaLocalSql("d", "fecha_devolucion");
+  const paramsVentas = [filtros.fechaInicio, filtros.fechaFin];
   const tiendaVentasSql = filtroTienda("v", filtros.tiendaId, paramsVentas);
 
   const ventas = await get(
@@ -187,14 +200,14 @@ async function consultarResumen(filtros) {
       COALESCE(SUM(CASE WHEN v.metodo_pago = 'fiado' THEN v.total ELSE 0 END), 0) AS total_fiado,
       COALESCE(SUM(CASE WHEN v.metodo_pago = 'mixto' THEN v.total ELSE 0 END), 0) AS total_mixto
     FROM ventas v
-    WHERE v.fecha_venta BETWEEN ? AND ?
+    WHERE ${fechaVentaLocal} BETWEEN ? AND ?
     AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
     ${tiendaVentasSql}
     `,
     paramsVentas
   );
 
-  const paramsDevoluciones = [filtros.inicioSql, filtros.finSql];
+  const paramsDevoluciones = [filtros.fechaInicio, filtros.fechaFin];
   const tiendaDevolucionesSql = filtroTienda("d", filtros.tiendaId, paramsDevoluciones);
 
   const devoluciones = await get(
@@ -203,7 +216,7 @@ async function consultarResumen(filtros) {
       COUNT(*) AS total_devoluciones,
       COALESCE(SUM(d.total_devuelto), 0) AS monto_devoluciones
     FROM devoluciones d
-    WHERE d.fecha_devolucion BETWEEN ? AND ?
+    WHERE ${fechaDevolucionLocal} BETWEEN ? AND ?
     ${tiendaDevolucionesSql}
     `,
     paramsDevoluciones
@@ -290,13 +303,16 @@ async function consultarBajoInventario(filtros) {
 
 async function consultarFiadosPendientes(filtros) {
   const params = [];
-
-  let tiendaSql = "";
+  const condiciones = [
+    "f.concepto NOT LIKE 'Envase prestado - %'",
+  ];
 
   if (filtros.tiendaId) {
-    tiendaSql = "WHERE f.tienda_id = ?";
+    condiciones.push("f.tienda_id = ?");
     params.push(filtros.tiendaId);
   }
+
+  const fiadosSql = `WHERE ${condiciones.join(" AND ")}`;
 
   return all(
     `
@@ -309,10 +325,13 @@ async function consultarFiadosPendientes(filtros) {
         SELECT SUM(a.monto)
         FROM abonos_fiado a
         WHERE a.cliente_id = c.id
+        AND COALESCE(a.observaciones, '') NOT LIKE 'Recepción de envase prestado:%'
+        AND COALESCE(a.observaciones, '') NOT LIKE 'Recepcion de envase prestado:%'
+        AND COALESCE(a.observaciones, '') NOT LIKE 'Cancelacion de envase por devolucion%'
       ), 0) AS deuda_total
     FROM clientes_fiado c
     INNER JOIN fiados f ON f.cliente_id = c.id
-    ${tiendaSql}
+    ${fiadosSql}
     GROUP BY c.id, c.nombre_completo
     HAVING deuda_total > 0
     ORDER BY deuda_total DESC

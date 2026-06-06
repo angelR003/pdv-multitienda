@@ -193,6 +193,10 @@ async function cargarAjustes() {
         <td class="p-3 text-zinc-400">
           ${ajuste.usuario}
         </td>
+
+        <td class="p-3 text-zinc-500 text-sm">
+          ${formatearFechaLocal(ajuste.fecha_ajuste)}
+        </td>
       `;
 
       tablaAjustes.appendChild(tr);
@@ -299,4 +303,32 @@ function pluralizar(texto) {
 
 function terminacionCerrado(texto) {
   return String(texto || "").toLowerCase().endsWith("a") ? "cerradas" : "cerrados";
+}
+
+function formatearFechaLocal(fecha) {
+  if (!fecha) return "-";
+
+  const fechaTexto = String(fecha);
+  const fechaISO = normalizarFechaSQLite(fechaTexto);
+  const date = new Date(fechaISO);
+
+  if (isNaN(date.getTime())) return fechaTexto;
+
+  return date.toLocaleString("es-MX", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function normalizarFechaSQLite(fechaTexto) {
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(fechaTexto)) {
+    return fechaTexto;
+  }
+
+  return fechaTexto.replace(" ", "T") + "Z";
 }

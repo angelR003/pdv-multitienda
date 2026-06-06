@@ -1,7 +1,8 @@
 const db = require("../database/connection");
-const redondearAMedioPeso = (monto) => {
-  return Math.round(monto * 2) / 2;
-};
+const {
+  calcularSubtotalOperativo,
+  esProductoAGranel,
+} = require("../../../frontend/js/redondeo-operativo");
 
 const calcularPromocionProducto = (cantidad, precioNormal, promocion) => {
   const cantidadNumero = Number(cantidad);
@@ -236,34 +237,7 @@ const registrarEnvasesVenta = ({ tienda_id, usuario_id, folio, envases }, callba
               }
 
               if (envase.escenario === "envase_prestado") {
-                db.run(
-                  `
-                  INSERT INTO fiados (
-                    cliente_id,
-                    usuario_id,
-                    tienda_id,
-                    concepto,
-                    monto
-                  )
-                  VALUES (?, ?, ?, ?, ?)
-                  `,
-                  [
-                    clienteResuelto.clienteFiadoId,
-                    usuario_id,
-                    tienda_id,
-                    `Envase prestado - ${envase.producto_nombre || tipoEnvase.nombre}`,
-                    importeUnitario * cantidad,
-                  ],
-                  (errorFiado) => {
-                    if (errorFiado) {
-                      callback("Error al registrar deuda de envase");
-                      return;
-                    }
-
-                    procesarEnvase(index + 1);
-                  }
-                );
-
+                procesarEnvase(index + 1);
                 return;
               }
 
@@ -505,7 +479,7 @@ db.get(
     let resultadoPrecio;
 
     const productoPuedeTenerPromo =
-      producto.tipo_producto !== "peso_variable" &&
+      !esProductoAGranel(producto) &&
       Number(producto.es_derivado) !== 1;
 
     if (productoPuedeTenerPromo) {
@@ -522,11 +496,7 @@ db.get(
       );
     }
 
-    let subtotal = resultadoPrecio.subtotal;
-
-    if (producto.tipo_producto === "peso_variable") {
-      subtotal = redondearAMedioPeso(subtotal);
-    }
+    let subtotal = calcularSubtotalOperativo(producto, resultadoPrecio.subtotal);
 
     subtotalVenta += subtotal;
 

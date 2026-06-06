@@ -220,40 +220,6 @@ if (!Number.isInteger(cantidadNumero)) {
             return;
           }
 
-          if (escenario === "envase_prestado") {
-            db.run(
-              `
-              INSERT INTO fiados (
-                cliente_id,
-                usuario_id,
-                tienda_id,
-                concepto,
-                monto
-              )
-              VALUES (?, ?, ?, ?, ?)
-              `,
-              [
-                clienteFiadoIdResuelto,
-                req.usuario.id,
-                tienda_id,
-                `Envase prestado - ${tipoEnvase.nombre}`,
-                importeUnitario * cantidadNumero,
-              ],
-              (errorFiado) => {
-                if (errorFiado) {
-                  return rollbackImporte(
-                    "Error al registrar deuda de envase",
-                    errorFiado.message
-                  );
-                }
-
-                confirmarImporte();
-              }
-            );
-
-            return;
-          }
-
           confirmarImporte();
         };
 
@@ -318,17 +284,27 @@ if (!Number.isInteger(cantidadNumero)) {
   );
 };
 const obtenerImportes = (req, res) => {
-  const { tienda_id } = req.query;
+  const { tienda_id, todas } = req.query;
+  const verTodas = todas === "1" && req.usuario.rol === "administrador";
 
-  if (!tienda_id) {
+  if (!tienda_id && !verTodas) {
     return res.status(400).json({
       error: "tienda_id es obligatorio",
     });
   }
 
+  const params = [];
+  const filtroTienda = verTodas ? "" : "AND i.tienda_id = ?";
+
+  if (!verTodas) {
+    params.push(tienda_id);
+  }
+
   const query = `
     SELECT
       i.id,
+      i.tienda_id,
+      ti.nombre AS tienda,
       i.cliente,
       i.escenario,
       i.cantidad,
@@ -342,12 +318,15 @@ const obtenerImportes = (req, res) => {
     FROM importes_envases i
     INNER JOIN tipos_envase t
       ON t.id = i.tipo_envase_id
-    WHERE i.tienda_id = ?
+    INNER JOIN tiendas ti
+      ON ti.id = i.tienda_id
+    WHERE 1 = 1
+    ${filtroTienda}
     AND i.estado = 'pendiente'
     ORDER BY i.fecha_registro DESC
   `;
 
-  db.all(query, [tienda_id], (error, rows) => {
+  db.all(query, params, (error, rows) => {
     if (error) {
       return res.status(500).json({
         error: "Error al obtener importes",
@@ -491,41 +470,10 @@ const devolverImporte = (req, res) => {
             return;
           }
 
-if (importe.escenario === "envase_prestado") {
-  if (!importe.cliente_fiado_id) {
-    registrarInventarioEnvase();
-    return;
-  }
-
-  db.run(
-    `
-    INSERT INTO abonos_fiado (
-      cliente_id,
-      usuario_id,
-      tienda_id,
-      monto,
-      observaciones
-    )
-    VALUES (?, ?, ?, ?, ?)
-    `,
-    [
-      importe.cliente_fiado_id,
-      req.usuario.id,
-      importe.tienda_id,
-      montoDevolver,
-      `Recepción de envase prestado: ${importe.cliente}`,
-    ],
-    (errorAbono) => {
-      if (errorAbono) {
-        return rollbackImporte("Error al descontar deuda del cliente");
-      }
-
-      registrarInventarioEnvase();
-    }
-  );
-
-  return;
-}
+          if (importe.escenario === "envase_prestado") {
+            registrarInventarioEnvase();
+            return;
+          }
 
           registrarInventarioEnvase();
         };

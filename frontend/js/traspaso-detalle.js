@@ -78,7 +78,7 @@ async function cargarDetalle() {
 
 function renderDetalle(traspaso, detalles) {
   tituloTraspaso.textContent = `Traspaso #${traspaso.id}`;
-  subtituloTraspaso.textContent = `Enviado: ${new Date(traspaso.fecha_envio).toLocaleString()}`;
+  subtituloTraspaso.textContent = `Enviado: ${formatearFechaLocal(traspaso.fecha_envio)}`;
 
   tiendaOrigen.textContent = traspaso.tienda_origen;
   tiendaDestino.textContent = traspaso.tienda_destino;
@@ -177,4 +177,32 @@ function formatearCantidad(valor, unidad) {
   return numero
     .toFixed(3)
     .replace(/\.?0+$/, "");
+}
+
+function formatearFechaLocal(fecha) {
+  if (!fecha) return "-";
+
+  const fechaTexto = String(fecha);
+  const fechaISO = normalizarFechaSQLite(fechaTexto);
+  const date = new Date(fechaISO);
+
+  if (isNaN(date.getTime())) return fechaTexto;
+
+  return date.toLocaleString("es-MX", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function normalizarFechaSQLite(fechaTexto) {
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(fechaTexto)) {
+    return fechaTexto;
+  }
+
+  return fechaTexto.replace(" ", "T") + "Z";
 }

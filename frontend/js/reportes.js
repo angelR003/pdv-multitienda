@@ -53,13 +53,26 @@ async function inicializar() {
 }
 
 function establecerFechasIniciales() {
-  const hoy = new Date();
-  const inicio = new Date();
+  const hoy = obtenerFechaActualLocal();
 
-  inicio.setDate(hoy.getDate() - 6);
+  fechaInicio.value = hoy;
+  fechaFin.value = formatearFechaInputLocal(hoy);
+}
 
-  fechaInicio.value = inicio.toISOString().slice(0, 10);
-  fechaFin.value = hoy.toISOString().slice(0, 10);
+function obtenerFechaActualLocal() {
+  return formatearFechaInputLocal(new Date());
+}
+
+function formatearFechaInputLocal(fecha) {
+  if (typeof fecha === "string") {
+    return fecha;
+  }
+
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, "0");
+  const day = String(fecha.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function mostrarMensaje(texto) {

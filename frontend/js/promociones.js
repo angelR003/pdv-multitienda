@@ -246,10 +246,7 @@ function formatearFechaLocal(fecha) {
 
   const fechaTexto = String(fecha);
 
-  const fechaISO = fechaTexto.includes("T")
-    ? fechaTexto
-    : fechaTexto.replace(" ", "T") + "Z";
-
+  const fechaISO = normalizarFechaSQLite(fechaTexto);
   const date = new Date(fechaISO);
 
   if (isNaN(date.getTime())) return fechaTexto;
@@ -264,4 +261,12 @@ function formatearFechaLocal(fecha) {
     second: "2-digit",
     hour12: false,
   });
+}
+
+function normalizarFechaSQLite(fechaTexto) {
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(fechaTexto)) {
+    return fechaTexto;
+  }
+
+  return fechaTexto.replace(" ", "T") + "Z";
 }

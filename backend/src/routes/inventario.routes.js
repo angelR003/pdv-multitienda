@@ -63,6 +63,50 @@ router.get("/tienda/:tiendaId", (req, res) => {
   });
 });
 
+router.get(
+  "/alertas-minimas/:tiendaId",
+  verificarToken,
+  (req, res) => {
+    const { tiendaId } = req.params;
+
+    const query = `
+      SELECT
+        i.id,
+        i.tienda_id,
+        t.nombre AS tienda,
+        p.id AS producto_id,
+        p.nombre AS producto,
+        p.codigo_barras,
+        p.tipo_producto,
+        p.presentacion,
+        p.unidad,
+        p.es_derivado,
+        p.factor_conversion,
+        i.cantidad_actual,
+        i.cantidad_minima,
+        i.cantidad_maxima
+      FROM inventario i
+      INNER JOIN productos p ON p.id = i.producto_id
+      INNER JOIN tiendas t ON t.id = i.tienda_id
+      WHERE i.tienda_id = ?
+      AND p.activo = 1
+      AND i.cantidad_minima > 0
+      AND i.cantidad_actual <= i.cantidad_minima
+      ORDER BY i.cantidad_actual ASC, p.nombre ASC
+    `;
+
+    db.all(query, [tiendaId], (error, rows) => {
+      if (error) {
+        return res.status(500).json({
+          error: "Error al obtener alertas de inventario",
+        });
+      }
+
+      res.json(rows);
+    });
+  }
+);
+
 router.put(
   "/:id/limites",
   verificarToken,

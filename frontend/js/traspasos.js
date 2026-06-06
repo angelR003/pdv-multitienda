@@ -296,7 +296,7 @@ function renderTraspasos() {
           ${traspaso.estado}
         </span>
       </td>
-      <td class="p-3 text-zinc-400">${new Date(traspaso.fecha_envio).toLocaleString()}</td>
+      <td class="p-3 text-zinc-400">${formatearFechaLocal(traspaso.fecha_envio)}</td>
       <td class="p-3 text-right">
         <a
           href="./traspaso-detalle.html?id=${traspaso.id}"
@@ -347,6 +347,34 @@ function formatearCantidad(valor, unidad) {
   return numero
     .toFixed(3)
     .replace(/\.?0+$/, "");
+}
+
+function formatearFechaLocal(fecha) {
+  if (!fecha) return "-";
+
+  const fechaTexto = String(fecha);
+  const fechaISO = normalizarFechaSQLite(fechaTexto);
+  const date = new Date(fechaISO);
+
+  if (isNaN(date.getTime())) return fechaTexto;
+
+  return date.toLocaleString("es-MX", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function normalizarFechaSQLite(fechaTexto) {
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(fechaTexto)) {
+    return fechaTexto;
+  }
+
+  return fechaTexto.replace(" ", "T") + "Z";
 }
 
 renderProductosTraspaso();
