@@ -55,6 +55,10 @@ const nuevoDeudorLimite = document.getElementById("nuevoDeudorLimite");
 const btnProductoSuelto = document.getElementById("btnProductoSuelto");
 const modalEnvasesVenta = document.getElementById("modalEnvasesVenta");
 const listaEnvasesVenta = document.getElementById("listaEnvasesVenta");
+const resumenImportesEnvasesVenta = document.getElementById("resumenImportesEnvasesVenta");
+const resumenEnvasesProductos = document.getElementById("resumenEnvasesProductos");
+const resumenEnvasesImportes = document.getElementById("resumenEnvasesImportes");
+const resumenEnvasesTotalCobrar = document.getElementById("resumenEnvasesTotalCobrar");
 const btnConfirmarEnvasesVenta = document.getElementById("btnConfirmarEnvasesVenta");
 const btnCancelarEnvasesVenta = document.getElementById("btnCancelarEnvasesVenta");
 const tituloModalManual = document.getElementById("tituloModalManual");
@@ -67,6 +71,8 @@ let promocionesActivas = [];
 let resolverEnvasesVenta = null;
 let ventaEnProceso = false;
 const redondeoOperativo = window.RedondeoOperativo;
+let tiposEnvaseVenta = [];
+let overflowBodyAntesModalEnvases = "";
 
 const usuarioId = usuario.id;
 
@@ -849,9 +855,10 @@ async function pedirEnvasesVenta() {
     return [];
   }
 
-  await cargarClientesFiado();
+  await Promise.all([cargarClientesFiado(), cargarTiposEnvaseVenta()]);
 
   listaEnvasesVenta.innerHTML = "";
+  actualizarResumenImportesEnvases();
 
   const opcionesClientes = clientesFiado
     .map(
@@ -943,6 +950,8 @@ async function pedirEnvasesVenta() {
       } else {
         contenedorCliente.classList.remove("hidden");
       }
+
+      actualizarResumenImportesEnvases();
     });
   });
 
@@ -961,16 +970,99 @@ async function pedirEnvasesVenta() {
     });
   });
 
-  modalEnvasesVenta.classList.remove("hidden");
-  modalEnvasesVenta.classList.add("flex");
+  abrirModalEnvasesVenta();
 
   return new Promise((resolve) => {
     resolverEnvasesVenta = resolve;
   });
 }
-btnCancelarEnvasesVenta?.addEventListener("click", () => {
+
+function abrirModalEnvasesVenta() {
+  overflowBodyAntesModalEnvases = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  modalEnvasesVenta.classList.remove("hidden");
+  modalEnvasesVenta.classList.add("flex");
+}
+
+function cerrarModalEnvasesVenta() {
+  document.body.style.overflow = overflowBodyAntesModalEnvases;
   modalEnvasesVenta.classList.add("hidden");
   modalEnvasesVenta.classList.remove("flex");
+}
+
+async function cargarTiposEnvaseVenta() {
+  if (tiposEnvaseVenta.length > 0) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/importes/tipos-envase`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      mostrarMensaje(data.error || "Error al cargar tipos de envase.");
+      tiposEnvaseVenta = [];
+      return;
+    }
+
+    tiposEnvaseVenta = data;
+  } catch (error) {
+    console.error("Error al cargar tipos de envase:", error);
+    tiposEnvaseVenta = [];
+    mostrarMensaje("Error al cargar tipos de envase.");
+  }
+}
+
+function obtenerTipoEnvaseVenta(tipoEnvaseId) {
+  return tiposEnvaseVenta.find(
+    (tipo) => Number(tipo.id) === Number(tipoEnvaseId)
+  );
+}
+
+function actualizarResumenImportesEnvases() {
+  if (!resumenImportesEnvasesVenta) {
+    return;
+  }
+
+  const retornables = obtenerItemsRetornables();
+  const totalProductos = carrito.reduce(
+    (sum, item) => sum + Number(item.subtotal || 0),
+    0
+  );
+
+  const totalImportes = retornables.reduce((sum, item) => {
+    const selectEscenario = listaEnvasesVenta.querySelector(
+      `.escenario-envase[data-producto-id="${item.producto_id}"]`
+    );
+
+    if (selectEscenario?.value !== "dejo_importe") {
+      return sum;
+    }
+
+    const tipoEnvase = obtenerTipoEnvaseVenta(item.tipo_envase_id);
+    const importeUnitario = Number(tipoEnvase?.importe || 0);
+
+    return sum + importeUnitario * Number(item.cantidad || 0);
+  }, 0);
+
+  if (totalImportes <= 0) {
+    resumenImportesEnvasesVenta.classList.add("hidden");
+    return;
+  }
+
+  resumenEnvasesProductos.textContent = `$${totalProductos.toFixed(2)}`;
+  resumenEnvasesImportes.textContent = `+$${totalImportes.toFixed(2)}`;
+  resumenEnvasesTotalCobrar.textContent = `$${(totalProductos + totalImportes).toFixed(2)}`;
+  resumenImportesEnvasesVenta.classList.remove("hidden");
+}
+
+btnCancelarEnvasesVenta?.addEventListener("click", () => {
+  cerrarModalEnvasesVenta();
 
   if (resolverEnvasesVenta) {
     resolverEnvasesVenta(null);
@@ -1049,8 +1141,7 @@ btnConfirmarEnvasesVenta?.addEventListener("click", () => {
     });
   }
 
-  modalEnvasesVenta.classList.add("hidden");
-  modalEnvasesVenta.classList.remove("flex");
+  cerrarModalEnvasesVenta();
 
   if (resolverEnvasesVenta) {
     resolverEnvasesVenta(envases);
