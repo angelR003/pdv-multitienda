@@ -1,174 +1,243 @@
 # PDV Las Gardenias
 
-Sistema de punto de venta multitienda para operacion local, inventario, ventas, traspasos, fiados, envases retornables y reportes operativos.
+![PDV Las Gardenias](assets/app-icon.png)
 
-Este proyecto nacio para resolver una necesidad real: administrar tiendas familiares sin depender de internet, sin hojas sueltas, sin calculos a mano y sin perder control sobre lo que entra, sale, se presta, se cobra o se mueve entre sucursales.
+Sistema de punto de venta multitienda para operacion local, ventas rapidas, inventario, traspasos, fiados, envases retornables, recargas, servicios, cortes y reportes.
 
-## Vision
-
-PDV Las Gardenias busca ser un sistema ligero, local y confiable para tiendas de abarrotes, minisuper o negocios familiares con mas de una sucursal.
-
-La prioridad no es verse como un demo bonito, sino funcionar en el mostrador: rapido para vender, claro para inventariar, estricto con el dinero, cuidadoso con los productos derivados y preparado para crecer hacia sincronizacion entre tiendas.
+PDV Las Gardenias nacio para una tienda real: mostrador, clientes, envases, fiados, promociones, productos sueltos, recargas, entradas de mercancia, traspasos entre sucursales y decisiones diarias que no pueden depender de internet.
 
 ## Estado Actual
 
-Version: `1.1.9`
+Version: `1.2.3`
 
-El sistema ya cuenta con modulos funcionales para:
+Esta version consolida el sistema como una aplicacion de escritorio local, con migraciones automaticas, interfaz pulida y modulos operativos listos para pruebas reales antes de avanzar a sincronizacion entre tiendas.
 
-- Ventas por codigo de barras.
-- Productos a granel.
-- Productos manuales y productos derivados.
-- Inventario por tienda.
-- Entradas de mercancia.
-- Ajustes de inventario.
-- Traspasos entre tiendas.
-- Notificaciones de traspasos pendientes.
-- Fiados, clientes, deudas y abonos.
-- Envases retornables, importes y envases prestados.
-- Promociones por cantidad.
-- Devoluciones.
-- Cortes y movimientos de caja.
-- Usuarios por rol.
-- Reportes con graficas locales.
-- Backups locales de la base de datos.
-- Aplicacion de escritorio con Electron.
+## Lo Nuevo En 1.2.3
+
+- Recargas electronicas con montos rapidos: `$10`, `$15`, `$20`, `$25`, `$30`, `$50`, `$100`, `$200` y `$500`.
+- Servicios electronicos con monto libre para pagos como Sky, Google Play u otros servicios externos.
+- Pago mixto con desglose real entre efectivo, transferencia y fiado.
+- Registro de pagos mixtos en base de datos para cortes y reportes.
+- Reportes y cortes ajustados para separar correctamente efectivo, transferencia y fiado.
+- Redondeo operativo visible en ventas para productos a granel.
+- Fechas locales corregidas para evitar adelantos por UTC.
+- Envases prestados separados de deuda monetaria en fiados.
+- Importes por caja de envase para cerveza, ademas del importe individual.
+- Ajuste manual de envases con historial.
+- Buscadores/autocomplete mejorados en traspasos, entradas, ajustes y promociones.
+- Clientes fiados editables y desactivables con baja logica.
+- Notificaciones de traspasos y alertas operativas desde dashboard.
+- Login, dashboard e interfaz general mas cuidada visualmente.
+- Logo propio de la aplicacion e icono de instalador para Windows.
+- Migraciones automaticas reforzadas para tablas y columnas nuevas.
+
+## Vision
+
+El objetivo es que una tienda pueda operar sin hojas sueltas, sin calculos a mano y sin depender de servicios externos para funcionar.
+
+El sistema esta pensado para:
+
+- Vender rapido en mostrador.
+- Controlar inventario por tienda.
+- Evitar errores con productos sueltos o derivados.
+- Controlar fiados sin confundir dinero con envases fisicos.
+- Registrar traspasos entre sucursales.
+- Ver reportes locales con graficas sin depender de CDN.
+- Prepararse para sincronizacion futura entre tiendas.
+
+## Mapa Operativo
+
+```mermaid
+flowchart LR
+    A["Dashboard"] --> B["Ventas"]
+    A --> C["Productos"]
+    A --> D["Inventario"]
+    A --> E["Entradas"]
+    A --> F["Traspasos"]
+    A --> G["Fiados"]
+    A --> H["Importes y Envases"]
+    A --> I["Promociones"]
+    A --> J["Reportes"]
+    A --> K["Cortes"]
+    A --> L["Usuarios"]
+
+    B --> M["Productos normales"]
+    B --> N["Granel"]
+    B --> O["Productos sueltos"]
+    B --> P["Retornables"]
+    B --> Q["Recargas y servicios"]
+
+    P --> H
+    B --> G
+    F --> D
+    E --> D
+    K --> J
+```
 
 ## Modulos Principales
 
 ### Dashboard
 
-Panel principal de operacion. Muestra la sesion activa, accesos a modulos y notificaciones de traspasos. El dashboard separa funcionalidades por rol para que un empleado no vea herramientas administrativas que no le corresponden.
+Centro de acceso a toda la operacion. Muestra la sesion activa, accesos por rol, notificaciones de traspasos y alertas operativas. Los empleados no ven herramientas administrativas que no les corresponden.
 
 ### Ventas
 
-Pantalla de venta rapida para operacion diaria.
+Pantalla de venta rapida para codigo de barras, productos a granel, productos sueltos, retornables, recargas y servicios.
 
 Incluye:
 
-- Escaneo por codigo de barras.
-- Agregar productos a granel.
-- Agregar productos sueltos o derivados.
-- Calculo de total y cambio.
-- Pago en efectivo, tarjeta o fiado.
+- Escaneo o escritura de codigo de barras.
+- Agregar producto por peso.
+- Agregar producto suelto o derivado.
+- Agregar recarga o servicio electronico.
+- Promociones por cantidad.
+- Redondeo operativo a multiplos de `$0.50` para granel.
+- Pago en efectivo, transferencia, fiado o mixto.
+- Modal de pago mixto con desglose validado.
+- Manejo de envases retornables.
+- Recordatorio visual cuando se debe cobrar importe de envase.
 - Validacion de stock antes de cobrar.
 - Bloqueo contra doble cobro accidental.
-- Manejo de productos retornables.
-- Registro automatico de envases e importes cuando aplica.
+
+### Recargas Y Servicios
+
+Modulo integrado dentro de ventas para conceptos electronicos que no son inventario fisico.
+
+Recargas:
+
+- Montos rapidos.
+- Comision automatica de `$1.00`.
+- No requieren codigo de barras.
+- No afectan inventario.
+
+Servicios:
+
+- Monto libre.
+- Sin comision automatica.
+- Sirven para pagos donde la comision puede variar.
+- No afectan inventario.
 
 ### Productos
 
-Modulo para crear y administrar productos.
+Administracion de catalogo.
 
-Permite:
+Soporta:
 
 - Productos con codigo de barras.
 - Productos a granel.
 - Productos manuales.
-- Productos derivados, como cigarros sueltos desde una cajetilla.
 - Productos retornables ligados a tipos de envase.
-- Edicion, activacion y desactivacion.
-- Busqueda por nombre, codigo, categoria o marca.
+- Productos derivados, como cigarros sueltos desde una cajetilla.
+- Activacion y desactivacion.
+- Busqueda por nombre, codigo, categoria, marca o presentacion.
 
 ### Inventario
 
 Control de existencias por tienda.
 
-El inventario entiende productos normales y productos derivados. Por ejemplo, si una cajetilla tiene 20 cigarros y se venden 13 sueltos, la existencia se muestra de forma humana, no como un decimal confuso.
+El sistema evita mostrar decimales peligrosos en productos derivados. Por ejemplo, una cajetilla con cigarros sueltos se entiende como paquetes y piezas, no como `0.65 cajetillas`.
 
 Ejemplo:
 
 ```text
-0 cajetillas + 7 piezas
 1 cajetilla + 5 piezas
+0 cajetillas + 7 piezas
 ```
 
-Esto evita errores peligrosos como creer que queda una cajetilla completa cuando en realidad solo quedan piezas sueltas.
+### Entradas De Mercancia
 
-### Entradas de Mercancia
+Registro de mercancia nueva.
 
-Registro de mercancia nueva al inventario.
+Permite buscar productos con autocomplete y capturar existencias de forma operativa. Para productos derivados, se pueden registrar paquetes cerrados y piezas sueltas.
 
-Para productos con derivados, el sistema permite capturar paquetes cerrados y piezas sueltas por separado. Por ejemplo:
+### Ajustes De Inventario
 
-```text
-1 cajetilla cerrada
-5 piezas sueltas
-```
+Correcciones manuales por conteo fisico, merma, producto roto o diferencia de inventario.
 
-Internamente se guarda con precision, pero el usuario no necesita pensar en decimales.
-
-### Ajustes de Inventario
-
-Correcciones manuales de existencias.
-
-Sirve para conteos fisicos, diferencias, producto roto, merma o correcciones operativas. Al igual que entradas, permite ajustar productos derivados usando paquetes cerrados y piezas sueltas.
+Incluye buscador mejorado y soporte para productos derivados usando paquetes y piezas.
 
 ### Traspasos
 
-Modulo para mover mercancia entre tiendas.
+Movimiento de mercancia entre tiendas.
 
-Flujo general:
+Flujo:
 
 1. Un administrador crea el traspaso.
-2. El inventario se descuenta de la tienda origen.
-3. La tienda destino recibe una notificacion.
-4. El responsable revisa el detalle del traspaso.
-5. Al confirmar recepcion, el inventario aumenta en la tienda destino.
+2. El inventario baja en la tienda origen.
+3. La tienda destino recibe notificacion.
+4. El responsable revisa el detalle.
+5. Al confirmar recepcion, el inventario sube en destino.
 
-Incluye:
-
-- Traspasos entre sucursales.
-- Detalle de productos enviados.
-- Recepcion por la tienda destino.
-- Cancelacion cuando aplica.
-- Notificaciones en el dashboard.
-- Acceso controlado por rol.
+Incluye detalle de productos, notificacion en dashboard, recepcion por empleados o administradores y acceso controlado por rol.
 
 ### Fiados
 
-Control de clientes deudores.
+Control de clientes, deudas y abonos.
 
 Incluye:
 
 - Crear clientes.
-- Registrar deudas.
+- Editar clientes.
+- Desactivar clientes sin borrar historial.
+- Registrar deuda monetaria.
 - Registrar abonos.
 - Ver historial.
 - Controlar limite de credito.
 - Integracion con ventas fiadas.
-- Integracion con envases prestados.
+- Separacion entre dinero fiado y envases fisicos pendientes.
 
-### Importes y Envases Retornables
+### Importes Y Envases Retornables
 
-Modulo para manejar escenarios comunes de tiendas con envases:
+Modulo para manejar envases vacios, importes y prestamos de envase.
+
+Escenarios:
 
 - El cliente trae envase.
 - El cliente deja importe.
 - El cliente se lleva envase prestado.
 
-El sistema registra pendientes, importes, envases vacios y deudas asociadas cuando corresponde.
+Tambien incluye:
+
+- Inventario de envases vacios.
+- Ajuste manual de envases con historial.
+- Importe por caja para envases de cerveza.
+- Relacion con clientes fiados cuando aplica.
+- Recepcion parcial o total de pendientes.
 
 ### Promociones
 
-Promociones por cantidad para productos completos.
+Promociones por cantidad sobre productos.
 
 Ejemplo:
 
 ```text
+2 piezas por $40.00
 3 piezas por $25.00
 ```
 
-El sistema conserva precio original, precio final, cantidad promocionada y descuento aplicado para reportes e historial.
+El sistema conserva precio original, precio final, descuento aplicado y cantidad promocionada para historial y reportes.
+
+### Cortes
+
+Control de caja.
+
+Considera:
+
+- Ventas en efectivo.
+- Transferencias.
+- Fiados.
+- Pagos mixtos separados por metodo.
+- Movimientos manuales de caja.
+- Devoluciones.
 
 ### Reportes
 
-Panel de analisis operativo con graficas locales, sin depender de CDN ni internet.
+Panel de analisis con graficas locales.
 
 Incluye:
 
 - Ventas totales.
-- Numero de ventas.
+- Ventas registradas.
 - Ticket promedio.
 - Devoluciones.
 - Ventas por dia.
@@ -178,24 +247,24 @@ Incluye:
 - Inventario bajo.
 - Fiados pendientes.
 
-### Usuarios y Roles
+Las fechas se calculan con fecha local de la PC para evitar errores por UTC.
 
-El sistema diferencia permisos entre administradores y empleados.
+### Usuarios Y Roles
 
-Un administrador puede gestionar configuracion, usuarios, reportes y traspasos. Un empleado puede operar ventas y recibir traspasos cuando corresponda.
+Administradores y empleados tienen accesos distintos.
 
-### Backups
-
-El backend genera respaldos locales de la base de datos para reducir riesgo de perdida accidental durante la operacion o actualizaciones.
+Un administrador puede gestionar configuracion, usuarios, reportes, promociones y traspasos. Un empleado puede operar ventas y recibir traspasos cuando corresponda.
 
 ## Arquitectura
-
-El sistema esta construido como una aplicacion de escritorio con frontend local y backend Node.js.
 
 ```text
 PDV-Multitienda
 |
 |-- frontend/              Pantallas HTML, CSS y JavaScript
+|   |-- js/                Logica de interfaz por modulo
+|   |-- css/               Tailwind local y estilos compilados
+|   |-- assets/            Imagenes usadas por el frontend
+|
 |-- backend/
 |   |-- src/
 |   |   |-- app.js          Servidor Express
@@ -205,9 +274,10 @@ PDV-Multitienda
 |   |   |-- middlewares/    Autenticacion y roles
 |   |   |-- utils/          Backups y utilidades
 |
+|-- assets/                Iconos de la app Electron
 |-- main.js                Entrada Electron
 |-- preload.js             Puente seguro Electron
-|-- package.json           Scripts, build y configuracion de app
+|-- package.json           Scripts, build y configuracion
 ```
 
 ## Stack Tecnico
@@ -218,75 +288,36 @@ PDV-Multitienda
 - SQLite
 - Electron
 - Tailwind CSS local
-- HTML y JavaScript vanilla en frontend
+- HTML y JavaScript vanilla
 - JWT para autenticacion
 - bcrypt para contrasenas
-- electron-builder para instaladores
+- electron-builder
+- electron-updater
 
-## Principios del Proyecto
+## Base De Datos
 
-- Offline primero.
-- Rapido en mostrador.
-- Sin depender de estilos o librerias externas por CDN.
-- Base local con SQLite.
-- Control por tienda.
-- Interfaces simples para personal no tecnico.
-- Validaciones fuertes en backend.
-- Operacion real antes que arquitectura innecesaria.
-
-## Instalacion de Desarrollo
-
-Instalar dependencias del proyecto principal:
-
-```powershell
-npm install
-```
-
-Instalar dependencias del backend:
-
-```powershell
-cd backend
-npm install
-```
-
-Iniciar backend en desarrollo:
-
-```powershell
-cd backend
-npm run dev
-```
-
-Abrir la app de escritorio:
-
-```powershell
-npm run electron
-```
-
-Compilar CSS local:
-
-```powershell
-npm run build:css
-```
-
-Construir instalador:
-
-```powershell
-npm run build
-```
-
-## Base de Datos
-
-La aplicacion usa SQLite local. En Windows, la base operativa se guarda en la carpeta de datos de la aplicacion:
+La aplicacion usa SQLite local. En Windows, la base operativa se guarda en:
 
 ```text
 C:\Users\<usuario>\AppData\Roaming\LasGardenias\data\pdv.sqlite
 ```
 
-El sistema ejecuta migraciones al iniciar para preparar tablas y columnas necesarias.
+El sistema ejecuta migraciones al iniciar para preparar tablas y columnas necesarias. Esto permite que una actualizacion cree automaticamente estructuras nuevas sin borrar la informacion existente.
+
+Migraciones relevantes:
+
+- Fiados y clientes.
+- Accesos por usuario.
+- Productos derivados.
+- Productos retornables.
+- Promociones.
+- Traspasos.
+- Ajustes de envases.
+- Importes por caja.
+- Pagos mixtos.
+- Servicios electronicos.
 
 ## Rutas API
-
-El backend expone rutas agrupadas por modulo:
 
 ```text
 /api/auth
@@ -308,55 +339,80 @@ El backend expone rutas agrupadas por modulo:
 /api/reportes
 ```
 
-## Pantallas
+## Instalacion De Desarrollo
 
-Pantallas principales disponibles en `frontend/`:
+Instalar dependencias principales:
 
-```text
-login.html
-config-terminal.html
-dashboard.html
-index.html
-productos.html
-inventario.html
-entradas.html
-ajustes-inventario.html
-ventas-historial.html
-venta-detalle.html
-cortes.html
-movimientos-caja.html
-fiados.html
-importes.html
-promociones.html
-traspasos.html
-traspaso-detalle.html
-reportes.html
-usuarios.html
+```powershell
+npm install
+```
+
+Instalar dependencias del backend:
+
+```powershell
+cd backend
+npm install
+```
+
+Iniciar backend en desarrollo:
+
+```powershell
+cd backend
+npm run dev
+```
+
+Abrir Electron:
+
+```powershell
+npm run electron
+```
+
+Compilar CSS local:
+
+```powershell
+npm run build:css
+```
+
+Construir instalador:
+
+```powershell
+npm run build
 ```
 
 ## Flujo Operativo Recomendado
 
-1. Configurar tienda/terminal.
+1. Configurar tienda y terminal.
 2. Crear usuarios.
-3. Registrar productos.
-4. Registrar entradas iniciales de inventario.
+3. Registrar productos y tipos de envase.
+4. Cargar inventario inicial con entradas o ajustes.
 5. Operar ventas diarias.
-6. Registrar devoluciones, fiados o envases cuando aplique.
-7. Usar traspasos para mover mercancia entre tiendas.
-8. Revisar reportes y cortes.
-9. Respaldar la base antes de actualizaciones importantes.
+6. Registrar devoluciones, fiados, importes o envases cuando aplique.
+7. Usar traspasos para mover mercancia entre sucursales.
+8. Revisar cortes y reportes.
+9. Respaldar antes de publicar actualizaciones importantes.
+
+## Principios Del Proyecto
+
+- Offline primero.
+- Rapido en mostrador.
+- Sin dependencias visuales por internet.
+- Base local con SQLite.
+- Validaciones fuertes en backend.
+- Interfaz clara para personal no tecnico.
+- Separar dinero, inventario y envases fisicos.
+- Pensado para operar antes que impresionar.
 
 ## Roadmap
 
-Siguientes pasos naturales del proyecto:
+Siguientes pasos naturales:
 
-- Sincronizacion entre tiendas.
-- Resolucion de conflictos de inventario entre sucursales.
-- Historial avanzado por producto.
-- Alertas mas inteligentes de inventario bajo.
-- Reportes exportables.
-- Mejoras de auditoria para cambios sensibles.
-- Pruebas automatizadas de flujos criticos.
+- Usar la version actual en tienda durante varias semanas.
+- Corregir bugs reales detectados en operacion.
+- Preparar sincronizacion entre tiendas.
+- Resolver conflictos de inventario entre sucursales.
+- Agregar auditoria avanzada para cambios sensibles.
+- Exportar reportes.
+- Automatizar pruebas de flujos criticos.
 
 ## Filosofia
 
@@ -365,9 +421,9 @@ Este PDV esta hecho para una tienda real, con problemas reales:
 - Clientes que dejan importe.
 - Envases que regresan despues.
 - Cigarros que se venden sueltos.
-- Mercancia que se mueve entre sucursales.
+- Mercancia que se mueve entre tiendas.
 - Empleados que necesitan operar sin ver todo.
 - Administradores que necesitan saber que esta pasando.
+- Recargas y servicios que se cobran sin tocar inventario.
 
 No es solo una caja registradora. Es el centro de control de Las Gardenias.
-
