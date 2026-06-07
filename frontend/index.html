@@ -182,13 +182,21 @@
           >
             Agregar producto por peso
           </button>
-          <button
+<button
   type="button"
   id="btnProductoSuelto"
   class="w-full mt-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3"
 >
   Agregar producto suelto
 </button>
+
+          <button
+            type="button"
+            id="btnServicioElectronico"
+            class="w-full mt-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3"
+          >
+            Agregar recarga / servicio
+          </button>
 
           <button
             type="button"
@@ -259,6 +267,78 @@
     </div>
 
     <div
+      id="modalServicioElectronico"
+      class="fixed inset-0 bg-black/70 hidden items-start justify-center overflow-y-auto p-4 z-50"
+    >
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl max-h-[calc(100vh-2rem)] overflow-y-auto p-6 my-4">
+        <h2 class="text-2xl font-bold mb-2">Recargas y servicios</h2>
+        <p class="text-zinc-400 text-sm mb-5">
+          Agrega una venta electrónica sin tocar inventario.
+        </p>
+
+        <div class="grid grid-cols-2 gap-2 bg-zinc-950 border border-zinc-800 rounded-2xl p-1 mb-5">
+          <button
+            type="button"
+            id="btnTabRecarga"
+            class="rounded-xl py-3 font-bold bg-green-500 text-black"
+          >
+            Recarga
+          </button>
+          <button
+            type="button"
+            id="btnTabServicio"
+            class="rounded-xl py-3 font-bold bg-zinc-800 text-white"
+          >
+            Servicio
+          </button>
+        </div>
+
+        <div id="panelRecarga">
+          <p class="text-sm text-zinc-400 mb-3">
+            La recarga cobra $1 de comisión automáticamente.
+          </p>
+          <div
+            id="montosRecarga"
+            class="grid grid-cols-3 gap-3"
+            style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem;"
+          ></div>
+        </div>
+
+        <div id="panelServicio" class="hidden">
+          <label class="block text-sm text-zinc-400 mb-2">
+            Monto a cobrar
+          </label>
+          <input
+            id="montoServicioElectronico"
+            type="number"
+            step="0.50"
+            min="0"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+            placeholder="Ejemplo: 350"
+          />
+
+          <button
+            type="button"
+            id="btnAgregarServicioElectronico"
+            class="w-full mt-4 bg-green-500 hover:bg-green-400 text-black font-bold rounded-xl py-3"
+          >
+            Agregar servicio
+          </button>
+        </div>
+
+        <p id="mensajeServicioElectronico" class="mt-4 text-sm text-zinc-400"></p>
+
+        <button
+          type="button"
+          id="btnCerrarServicioElectronico"
+          class="w-full mt-5 bg-zinc-800 hover:bg-zinc-700 rounded-xl py-3"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+    <div
       id="modalEnvasesVenta"
       class="fixed inset-0 bg-black/70 hidden items-start justify-center overflow-y-auto p-4 z-50"
     >
@@ -314,7 +394,117 @@
       </div>
     </div>
 
+    <div
+      id="modalPagoMixto"
+      class="fixed inset-0 bg-black/70 hidden items-start justify-center overflow-y-auto p-4 z-50"
+    >
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto p-6 my-4">
+        <h2 class="text-2xl font-bold mb-2">Pago mixto</h2>
+
+        <p class="text-zinc-400 text-sm mb-5">
+          Divide el total de productos. Los importes de envase se cobran aparte.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+          <div class="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+            <p class="text-sm text-zinc-400">Productos / servicios</p>
+            <p id="pagoMixtoTotalProductos" class="text-2xl font-black text-white">$0.00</p>
+          </div>
+          <div class="rounded-2xl border border-yellow-400/40 bg-yellow-400/10 p-4">
+            <p class="text-sm text-zinc-400">Importe aparte</p>
+            <p id="pagoMixtoTotalImportes" class="text-2xl font-black text-yellow-300">$0.00</p>
+          </div>
+          <div class="rounded-2xl border border-green-400/40 bg-green-400/10 p-4">
+            <p class="text-sm text-zinc-400">Falta repartir</p>
+            <p id="pagoMixtoRestante" class="text-2xl font-black text-green-400">$0.00</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="block">
+            <span class="block text-sm text-zinc-400 mb-2">Efectivo</span>
+            <input
+              id="pagoMixtoEfectivo"
+              type="number"
+              step="0.50"
+              min="0"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+              placeholder="0.00"
+            />
+          </label>
+
+          <label class="block">
+            <span class="block text-sm text-zinc-400 mb-2">Transferencia</span>
+            <input
+              id="pagoMixtoTransferencia"
+              type="number"
+              step="0.50"
+              min="0"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+              placeholder="0.00"
+            />
+          </label>
+
+          <label class="block">
+            <span class="block text-sm text-zinc-400 mb-2">Fiado</span>
+            <input
+              id="pagoMixtoFiado"
+              type="number"
+              step="0.50"
+              min="0"
+              class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+              placeholder="0.00"
+            />
+          </label>
+        </div>
+
+        <div id="grupoPagoMixtoCliente" class="hidden mt-4">
+          <label class="block text-sm text-zinc-400 mb-2">Cliente fiado</label>
+          <select
+            id="pagoMixtoCliente"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+          >
+            <option value="">Selecciona cliente...</option>
+          </select>
+        </div>
+
+        <label class="block mt-4">
+          <span class="block text-sm text-zinc-400 mb-2">Observaciones</span>
+          <textarea
+            id="pagoMixtoObservaciones"
+            rows="3"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+            placeholder="Opcional..."
+          ></textarea>
+        </label>
+
+        <p
+          id="mensajePagoMixto"
+          class="mt-4 text-sm font-bold text-yellow-300"
+        ></p>
+
+        <div class="sticky bottom-0 bg-zinc-900 border-t border-zinc-800 flex gap-3 mt-6 pt-4">
+          <button
+            type="button"
+            id="btnConfirmarPagoMixto"
+            class="flex-1 bg-green-500 hover:bg-green-400 text-black font-bold rounded-xl py-3"
+          >
+            Confirmar pago
+          </button>
+
+          <button
+            type="button"
+            id="btnCancelarPagoMixto"
+            class="flex-1 bg-zinc-800 hover:bg-zinc-700 rounded-xl py-3"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="./js/redondeo-operativo.js?v=20260605"></script>
-    <script src="./js/venta.js?v=20260605"></script>
+    <script src="./js/importes-envases.js?v=20260606"></script>
+    <script src="./js/venta.js?v=20260608"></script>
   </body>
 </html>

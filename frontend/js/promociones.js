@@ -12,13 +12,28 @@ if (usuario.rol !== "administrador") {
 }
 
 const productoPromocion = document.getElementById("productoPromocion");
+const buscarProductoPromocion = document.getElementById("buscarProductoPromocion");
+const resultadosProductoPromocion = document.getElementById("resultadosProductoPromocion");
 const cantidadRequerida = document.getElementById("cantidadRequerida");
 const precioPromocion = document.getElementById("precioPromocion");
 const btnGuardarPromocion = document.getElementById("btnGuardarPromocion");
 const tablaPromociones = document.getElementById("tablaPromociones");
 const mensaje = document.getElementById("mensaje");
 
+let productosElegibles = [];
+
 btnGuardarPromocion.addEventListener("click", crearPromocion);
+buscarProductoPromocion?.addEventListener("input", renderResultadosProductoPromocion);
+buscarProductoPromocion?.addEventListener("focus", renderResultadosProductoPromocion);
+
+document.addEventListener("click", (event) => {
+  if (
+    !buscarProductoPromocion?.contains(event.target) &&
+    !resultadosProductoPromocion?.contains(event.target)
+  ) {
+    resultadosProductoPromocion?.classList.add("hidden");
+  }
+});
 
 inicializarPromociones();
 
@@ -42,6 +57,7 @@ async function cargarProductosElegibles() {
       return;
     }
 
+    productosElegibles = productos;
     productoPromocion.innerHTML = `
       <option value="">Selecciona producto...</option>
     `;
@@ -123,6 +139,7 @@ async function crearPromocion() {
     }
 
     productoPromocion.value = "";
+    buscarProductoPromocion.value = "";
     cantidadRequerida.value = "";
     precioPromocion.value = "";
 
@@ -261,6 +278,76 @@ function formatearFechaLocal(fecha) {
     second: "2-digit",
     hour12: false,
   });
+}
+
+function renderResultadosProductoPromocion() {
+  if (!resultadosProductoPromocion) return;
+
+  const texto = normalizarTexto(buscarProductoPromocion.value);
+  const filtrados = productosElegibles
+    .filter((producto) => productoCoincideBusqueda(producto, texto))
+    .slice(0, 10);
+
+  resultadosProductoPromocion.innerHTML = "";
+
+  if (filtrados.length === 0) {
+    resultadosProductoPromocion.innerHTML = `
+      <div class="p-4 text-sm text-zinc-500">No hay productos elegibles.</div>
+    `;
+    resultadosProductoPromocion.classList.remove("hidden");
+    return;
+  }
+
+  filtrados.forEach((producto) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "w-full text-left px-4 py-3 hover:bg-zinc-900 border-b border-zinc-800 last:border-b-0";
+    button.innerHTML = `
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="font-black">${producto.nombre}</p>
+          <p class="text-xs text-zinc-500">
+            ${producto.codigo_barras || "Sin codigo"}${producto.marca ? ` - ${producto.marca}` : ""}${producto.categoria ? ` - ${producto.categoria}` : ""}${producto.presentacion ? ` - ${producto.presentacion}` : ""}
+          </p>
+        </div>
+        <div class="text-right text-sm font-bold text-cyan-300">
+          $${Number(producto.precio_global).toFixed(2)}
+        </div>
+      </div>
+    `;
+    button.addEventListener("click", () => seleccionarProductoPromocion(producto));
+    resultadosProductoPromocion.appendChild(button);
+  });
+
+  resultadosProductoPromocion.classList.remove("hidden");
+}
+
+function seleccionarProductoPromocion(producto) {
+  productoPromocion.value = producto.id;
+  buscarProductoPromocion.value = `${producto.nombre} - $${Number(producto.precio_global).toFixed(2)} / ${producto.unidad}`;
+  resultadosProductoPromocion?.classList.add("hidden");
+  cantidadRequerida.focus();
+}
+
+function productoCoincideBusqueda(producto, texto) {
+  if (!texto) return true;
+
+  return normalizarTexto([
+    producto.nombre,
+    producto.codigo_barras,
+    producto.categoria,
+    producto.marca,
+    producto.presentacion,
+    producto.unidad,
+  ].join(" ")).includes(texto);
+}
+
+function normalizarTexto(texto) {
+  return String(texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function normalizarFechaSQLite(fechaTexto) {

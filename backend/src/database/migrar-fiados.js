@@ -16,9 +16,8 @@ const schema = fs.readFileSync(schemaPath, "utf8");
 db.exec(schema, (error) => {
   if (error) {
     console.error("Error migrando fiados:", error.message);
-    process.exit(1);
+    return;
   }
 
-  console.log("Módulo de fiados listo.");
-  process.exit(0);
+  console.log("Modulo de fiados listo.");
 });

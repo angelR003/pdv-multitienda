@@ -44,8 +44,29 @@
     </section>
 
     <section id="detalleCliente" class="hidden mt-8 bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
-      <h2 id="detalleTitulo" class="text-3xl font-black mb-2"></h2>
-      <p id="detalleInfo" class="text-zinc-400 mb-6"></p>
+      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
+        <div>
+          <h2 id="detalleTitulo" class="text-3xl font-black mb-2"></h2>
+          <p id="detalleInfo" class="text-zinc-400"></p>
+        </div>
+
+        <div class="flex gap-3">
+          <button
+            id="btnEditarCliente"
+            class="bg-yellow-400 hover:bg-yellow-300 text-black px-4 py-2 rounded-xl font-bold"
+            style="background:#facc15;color:#000;border:1px solid #fde047;box-shadow:0 0 0 1px rgba(250,204,21,.25);"
+          >
+            Editar cliente
+          </button>
+
+          <button
+            id="btnDesactivarCliente"
+            class="bg-red-500 hover:bg-red-400 text-black px-4 py-2 rounded-xl font-bold"
+          >
+            Desactivar
+          </button>
+        </div>
+      </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-5">
@@ -90,6 +111,34 @@
 
   </main>
 
-  <script src="./js/fiados.js"></script>
+  <div
+    id="modalEditarCliente"
+    class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+  >
+    <div class="w-full max-w-2xl rounded-2xl bg-zinc-900 border border-zinc-700 p-6 shadow-2xl">
+      <h2 class="text-2xl font-black mb-5">Editar cliente</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input id="editarNombreCompleto" class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Nombre completo *">
+        <input id="editarApodo" class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Apodo">
+        <input id="editarTelefono" class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Telefono">
+        <input id="editarLimiteCredito" type="number" class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Limite credito">
+      </div>
+
+      <p id="mensajeEditarCliente" class="mt-4 text-sm text-zinc-400"></p>
+
+      <div class="flex gap-3 mt-5">
+        <button id="btnCancelarEditarCliente" class="flex-1 rounded-xl bg-zinc-700 px-4 py-3 font-bold text-white hover:bg-zinc-600">
+          Cancelar
+        </button>
+
+        <button id="btnGuardarEditarCliente" class="flex-1 rounded-xl bg-yellow-400 px-4 py-3 font-bold text-black hover:bg-yellow-300">
+          Guardar cambios
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/fiados.js?v=20260606"></script>
 </body>
 </html>

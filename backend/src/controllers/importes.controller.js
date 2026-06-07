@@ -1,4 +1,5 @@
 const db = require("../database/connection");
+const { calcularImporteEnvase } = require("../utils/importes-envases");
 
 const obtenerTiposEnvase = (req, res) => {
   db.all(
@@ -96,7 +97,7 @@ if (!Number.isInteger(cantidadNumero)) {
       const importeUnitario = Number(tipoEnvase.importe);
       const importeTotal =
         escenario === "dejo_importe"
-          ? importeUnitario * cantidadNumero
+          ? calcularImporteEnvase(tipoEnvase, cantidadNumero)
           : 0;
 
       db.serialize(() => {
@@ -350,9 +351,16 @@ const devolverImporte = (req, res) => {
 
   db.get(
     `
-    SELECT *
-    FROM importes_envases
-    WHERE id = ?
+    SELECT
+      i.*,
+      t.categoria,
+      t.importe,
+      t.cantidad_por_caja,
+      t.importe_por_caja
+    FROM importes_envases i
+    INNER JOIN tipos_envase t
+      ON t.id = i.tipo_envase_id
+    WHERE i.id = ?
     `,
     [id],
     (error, importe) => {
@@ -386,7 +394,10 @@ const devolverImporte = (req, res) => {
           : "pendiente";
 
       const montoDevolver =
-        cantidadNumero * Number(importe.importe_unitario);
+        importe.escenario === "dejo_importe"
+          ? (Number(importe.importe_total || 0) / Number(importe.cantidad || 1)) *
+            cantidadNumero
+          : 0;
 
       db.serialize(() => {
         db.run("BEGIN TRANSACTION");
@@ -518,6 +529,8 @@ const obtenerInventarioEnvases = (req, res) => {
       t.categoria,
       t.nombre,
       t.importe,
+      t.cantidad_por_caja,
+      t.importe_por_caja,
       COALESCE(i.cantidad_vacios, 0) AS cantidad_vacios
     FROM tipos_envase t
     LEFT JOIN inventario_envases i
@@ -539,10 +552,334 @@ const obtenerInventarioEnvases = (req, res) => {
   });
 };
 
+const actualizarConfiguracionCajaEnvase = (req, res) => {
+  const { id } = req.params;
+  const {
+    cantidad_por_caja,
+    importe_por_caja,
+  } = req.body;
+
+  const cantidadPorCaja = cantidad_por_caja === "" || cantidad_por_caja == null
+    ? null
+    : Number(cantidad_por_caja);
+  const importePorCaja = importe_por_caja === "" || importe_por_caja == null
+    ? null
+    : Number(importe_por_caja);
+
+  if (
+    cantidadPorCaja != null &&
+    (!Number.isInteger(cantidadPorCaja) || cantidadPorCaja <= 0)
+  ) {
+    return res.status(400).json({
+      error: "La cantidad por caja debe ser un entero mayor a 0",
+    });
+  }
+
+  if (importePorCaja != null && importePorCaja <= 0) {
+    return res.status(400).json({
+      error: "El importe por caja debe ser mayor a 0",
+    });
+  }
+
+  db.run(
+    `
+    UPDATE tipos_envase
+    SET
+      cantidad_por_caja = ?,
+      importe_por_caja = ?
+    WHERE id = ?
+    AND activo = 1
+    `,
+    [cantidadPorCaja, importePorCaja, id],
+    function (error) {
+      if (error) {
+        return res.status(500).json({
+          error: "Error al actualizar configuracion de caja",
+        });
+      }
+
+      if (this.changes === 0) {
+        return res.status(404).json({
+          error: "Tipo de envase no encontrado",
+        });
+      }
+
+      res.json({
+        mensaje: "Configuracion de caja actualizada",
+      });
+    }
+  );
+};
+
+const motivosAjusteEnvaseValidos = [
+  "Carga inicial",
+  "Entregado a proveedor",
+  "Enviado a otra tienda",
+  "Recibido de otra tienda",
+  "Correccion de conteo",
+  "Merma/perdida",
+  "Otro",
+];
+
+const registrarAjusteEnvases = (req, res) => {
+  const {
+    tienda_id,
+    tipo_envase_id,
+    modo,
+    cantidad,
+    motivo,
+    observaciones,
+  } = req.body;
+
+  const tiendaId = Number(tienda_id);
+  const tipoEnvaseId = Number(tipo_envase_id);
+  const cantidadNumero = Number(cantidad);
+
+  if (
+    !tiendaId ||
+    !tipoEnvaseId ||
+    !["sumar", "restar", "definir"].includes(modo) ||
+    cantidad == null ||
+    !motivo
+  ) {
+    return res.status(400).json({
+      error: "Datos incompletos para ajustar envases",
+    });
+  }
+
+  if (!Number.isInteger(cantidadNumero) || cantidadNumero < 0) {
+    return res.status(400).json({
+      error: "La cantidad debe ser un numero entero positivo",
+    });
+  }
+
+  if (modo !== "definir" && cantidadNumero <= 0) {
+    return res.status(400).json({
+      error: "La cantidad debe ser mayor a 0",
+    });
+  }
+
+  if (!motivosAjusteEnvaseValidos.includes(motivo)) {
+    return res.status(400).json({
+      error: "Motivo de ajuste invalido",
+    });
+  }
+
+  db.get(
+    `
+    SELECT id
+    FROM tipos_envase
+    WHERE id = ?
+    AND activo = 1
+    `,
+    [tipoEnvaseId],
+    (errorTipo, tipoEnvase) => {
+      if (errorTipo) {
+        return res.status(500).json({
+          error: "Error al validar tipo de envase",
+        });
+      }
+
+      if (!tipoEnvase) {
+        return res.status(404).json({
+          error: "Tipo de envase no encontrado",
+        });
+      }
+
+      db.serialize(() => {
+        db.run("BEGIN TRANSACTION");
+
+        const rollbackAjuste = (mensaje, detalle) => {
+          db.run("ROLLBACK", () => {
+            return res.status(500).json({
+              error: mensaje,
+              detalle,
+            });
+          });
+        };
+
+        db.get(
+          `
+          SELECT cantidad_vacios
+          FROM inventario_envases
+          WHERE tienda_id = ?
+          AND tipo_envase_id = ?
+          `,
+          [tiendaId, tipoEnvaseId],
+          (errorInventario, inventario) => {
+            if (errorInventario) {
+              return rollbackAjuste(
+                "Error al consultar inventario de envases",
+                errorInventario.message
+              );
+            }
+
+            const cantidadAnterior = Number(inventario?.cantidad_vacios || 0);
+            let cantidadNueva = cantidadAnterior;
+
+            if (modo === "sumar") {
+              cantidadNueva = cantidadAnterior + cantidadNumero;
+            }
+
+            if (modo === "restar") {
+              cantidadNueva = cantidadAnterior - cantidadNumero;
+            }
+
+            if (modo === "definir") {
+              cantidadNueva = cantidadNumero;
+            }
+
+            if (cantidadNueva < 0) {
+              db.run("ROLLBACK", () => {
+                return res.status(400).json({
+                  error: "El ajuste no puede dejar envases negativos",
+                });
+              });
+              return;
+            }
+
+            const diferencia = cantidadNueva - cantidadAnterior;
+
+            db.run(
+              `
+              INSERT INTO inventario_envases (
+                tienda_id,
+                tipo_envase_id,
+                cantidad_vacios
+              )
+              VALUES (?, ?, ?)
+              ON CONFLICT(tienda_id, tipo_envase_id)
+              DO UPDATE SET
+                cantidad_vacios = excluded.cantidad_vacios
+              `,
+              [tiendaId, tipoEnvaseId, cantidadNueva],
+              (errorUpdate) => {
+                if (errorUpdate) {
+                  return rollbackAjuste(
+                    "Error al actualizar inventario de envases",
+                    errorUpdate.message
+                  );
+                }
+
+                db.run(
+                  `
+                  INSERT INTO ajustes_envases (
+                    tienda_id,
+                    usuario_id,
+                    tipo_envase_id,
+                    cantidad_anterior,
+                    cantidad_nueva,
+                    diferencia,
+                    modo,
+                    motivo,
+                    observaciones
+                  )
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `,
+                  [
+                    tiendaId,
+                    req.usuario.id,
+                    tipoEnvaseId,
+                    cantidadAnterior,
+                    cantidadNueva,
+                    diferencia,
+                    modo,
+                    motivo,
+                    observaciones || null,
+                  ],
+                  function (errorAjuste) {
+                    if (errorAjuste) {
+                      return rollbackAjuste(
+                        "Error al registrar historial de ajuste",
+                        errorAjuste.message
+                      );
+                    }
+
+                    db.run("COMMIT", (errorCommit) => {
+                      if (errorCommit) {
+                        return rollbackAjuste(
+                          "Error al confirmar ajuste de envases",
+                          errorCommit.message
+                        );
+                      }
+
+                      return res.status(201).json({
+                        mensaje: "Ajuste de envases realizado correctamente",
+                        ajuste_id: this.lastID,
+                        cantidad_anterior: cantidadAnterior,
+                        cantidad_nueva: cantidadNueva,
+                        diferencia,
+                      });
+                    });
+                  }
+                );
+              }
+            );
+          }
+        );
+      });
+    }
+  );
+};
+
+const obtenerAjustesEnvases = (req, res) => {
+  const { tienda_id } = req.query;
+
+  if (!tienda_id) {
+    return res.status(400).json({
+      error: "tienda_id es obligatorio",
+    });
+  }
+
+  db.all(
+    `
+    SELECT
+      a.id,
+      a.tienda_id,
+      ti.nombre AS tienda,
+      a.tipo_envase_id,
+      te.categoria,
+      te.nombre AS tipo_envase,
+      u.nombre AS usuario,
+      a.cantidad_anterior,
+      a.cantidad_nueva,
+      a.diferencia,
+      a.modo,
+      a.motivo,
+      a.observaciones,
+      a.fecha_ajuste
+    FROM ajustes_envases a
+    INNER JOIN tipos_envase te
+      ON te.id = a.tipo_envase_id
+    INNER JOIN tiendas ti
+      ON ti.id = a.tienda_id
+    INNER JOIN usuarios u
+      ON u.id = a.usuario_id
+    WHERE a.tienda_id = ?
+    ORDER BY a.fecha_ajuste DESC
+    LIMIT 25
+    `,
+    [tienda_id],
+    (error, rows) => {
+      if (error) {
+        return res.status(500).json({
+          error: "Error al obtener ajustes de envases",
+          detalle: error.message,
+        });
+      }
+
+      res.json(rows);
+    }
+  );
+};
+
 module.exports = {
   obtenerTiposEnvase,
   registrarImporte,
   obtenerImportes,
   devolverImporte,
   obtenerInventarioEnvases,
+  actualizarConfiguracionCajaEnvase,
+  registrarAjusteEnvases,
+  obtenerAjustesEnvases,
 };

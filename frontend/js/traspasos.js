@@ -18,7 +18,8 @@ const panelCrearTraspaso = document.getElementById("panelCrearTraspaso");
 const tiendaOrigen = document.getElementById("tiendaOrigen");
 const tiendaDestino = document.getElementById("tiendaDestino");
 const motivoTraspaso = document.getElementById("motivoTraspaso");
-const productoTraspaso = document.getElementById("productoTraspaso");
+const buscadorProductoTraspaso = document.getElementById("buscadorProductoTraspaso");
+const resultadosProductoTraspaso = document.getElementById("resultadosProductoTraspaso");
 const cantidadTraspaso = document.getElementById("cantidadTraspaso");
 const btnAgregarProducto = document.getElementById("btnAgregarProducto");
 const btnEnviarTraspaso = document.getElementById("btnEnviarTraspaso");
@@ -31,6 +32,7 @@ let tiendas = [];
 let productosOrigen = [];
 let productosTraspaso = [];
 let traspasos = [];
+let productoSeleccionadoTraspasoId = null;
 
 if (!esAdmin) {
   panelCrearTraspaso.remove();
@@ -38,8 +40,25 @@ if (!esAdmin) {
 
 btnAgregarProducto?.addEventListener("click", agregarProductoTraspaso);
 btnEnviarTraspaso?.addEventListener("click", enviarTraspaso);
-tiendaOrigen?.addEventListener("change", cargarProductosOrigen);
+tiendaOrigen?.addEventListener("change", async () => {
+  productosTraspaso = [];
+  renderProductosTraspaso();
+  await cargarProductosOrigen();
+});
 filtroEstado.addEventListener("change", renderTraspasos);
+buscadorProductoTraspaso?.addEventListener("input", () => {
+  productoSeleccionadoTraspasoId = null;
+  renderResultadosProductoTraspaso();
+});
+buscadorProductoTraspaso?.addEventListener("focus", renderResultadosProductoTraspaso);
+document.addEventListener("click", (event) => {
+  if (
+    !buscadorProductoTraspaso?.contains(event.target) &&
+    !resultadosProductoTraspaso?.contains(event.target)
+  ) {
+    resultadosProductoTraspaso?.classList.add("hidden");
+  }
+});
 
 inicializar();
 
@@ -117,21 +136,103 @@ async function cargarProductosOrigen() {
       `${API_URL}/traspasos/productos?tienda_id=${tiendaOrigen.value}`
     );
 
-    productoTraspaso.innerHTML = "";
-
-    productosOrigen.forEach((producto) => {
-      const option = document.createElement("option");
-      option.value = producto.id;
-      option.textContent = `${producto.nombre} - ${formatearCantidad(producto.cantidad_actual, producto.unidad)} ${producto.unidad}`;
-      productoTraspaso.appendChild(option);
-    });
+    productoSeleccionadoTraspasoId = null;
+    buscadorProductoTraspaso.value = "";
+    resultadosProductoTraspaso.innerHTML = "";
+    resultadosProductoTraspaso.classList.add("hidden");
   } catch (error) {
     mostrarMensaje(error.message);
   }
 }
 
+function renderResultadosProductoTraspaso() {
+  if (!resultadosProductoTraspaso) return;
+
+  const busqueda = normalizarTexto(buscadorProductoTraspaso.value);
+
+  const productosFiltrados = productosOrigen
+    .filter((producto) => productoCoincideBusqueda(producto, busqueda))
+    .slice(0, 10);
+
+  resultadosProductoTraspaso.innerHTML = "";
+
+  if (productosFiltrados.length === 0) {
+    resultadosProductoTraspaso.innerHTML = `
+      <div class="p-4 text-sm text-zinc-500">
+        No hay productos activos con existencia en la tienda origen.
+      </div>
+    `;
+    resultadosProductoTraspaso.classList.remove("hidden");
+    return;
+  }
+
+  productosFiltrados.forEach((producto) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      "w-full text-left px-4 py-3 hover:bg-zinc-900 border-b border-zinc-800 last:border-b-0";
+
+    button.innerHTML = `
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="font-black">${producto.nombre}</p>
+          <p class="text-xs text-zinc-500">
+            ${producto.codigo_barras || "Sin codigo"}${producto.marca ? ` - ${producto.marca}` : ""}${producto.categoria ? ` - ${producto.categoria}` : ""}
+          </p>
+        </div>
+        <div class="text-right">
+          <p class="text-sm font-bold text-green-300">
+            ${formatearCantidad(producto.cantidad_actual, producto.unidad)} ${producto.unidad}
+          </p>
+          <p class="text-xs text-zinc-500">Disponible</p>
+        </div>
+      </div>
+    `;
+
+    button.addEventListener("click", () => {
+      seleccionarProductoTraspaso(producto);
+    });
+
+    resultadosProductoTraspaso.appendChild(button);
+  });
+
+  resultadosProductoTraspaso.classList.remove("hidden");
+}
+
+function productoCoincideBusqueda(producto, busqueda) {
+  if (!busqueda) {
+    return true;
+  }
+
+  const texto = normalizarTexto(
+    [
+      producto.nombre,
+      producto.marca,
+      producto.categoria,
+      producto.codigo_barras,
+    ].join(" ")
+  );
+
+  return texto.includes(busqueda);
+}
+
+function normalizarTexto(texto) {
+  return String(texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function seleccionarProductoTraspaso(producto) {
+  productoSeleccionadoTraspasoId = Number(producto.id);
+  buscadorProductoTraspaso.value = `${producto.nombre} - ${formatearCantidad(producto.cantidad_actual, producto.unidad)} ${producto.unidad}`;
+  resultadosProductoTraspaso.classList.add("hidden");
+  cantidadTraspaso.focus();
+}
+
 function agregarProductoTraspaso() {
-  const productoId = Number(productoTraspaso.value);
+  const productoId = Number(productoSeleccionadoTraspasoId);
   const cantidad = Number(cantidadTraspaso.value);
 
   const producto = productosOrigen.find(
@@ -179,6 +280,9 @@ function agregarProductoTraspaso() {
   }
 
   cantidadTraspaso.value = "";
+  productoSeleccionadoTraspasoId = null;
+  buscadorProductoTraspaso.value = "";
+  buscadorProductoTraspaso.focus();
   renderProductosTraspaso();
 }
 

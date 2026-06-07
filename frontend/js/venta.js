@@ -53,6 +53,17 @@ const nuevoDeudorApodo = document.getElementById("nuevoDeudorApodo");
 const nuevoDeudorTelefono = document.getElementById("nuevoDeudorTelefono");
 const nuevoDeudorLimite = document.getElementById("nuevoDeudorLimite");
 const btnProductoSuelto = document.getElementById("btnProductoSuelto");
+const btnServicioElectronico = document.getElementById("btnServicioElectronico");
+const modalServicioElectronico = document.getElementById("modalServicioElectronico");
+const btnTabRecarga = document.getElementById("btnTabRecarga");
+const btnTabServicio = document.getElementById("btnTabServicio");
+const panelRecarga = document.getElementById("panelRecarga");
+const panelServicio = document.getElementById("panelServicio");
+const montosRecarga = document.getElementById("montosRecarga");
+const montoServicioElectronico = document.getElementById("montoServicioElectronico");
+const btnAgregarServicioElectronico = document.getElementById("btnAgregarServicioElectronico");
+const btnCerrarServicioElectronico = document.getElementById("btnCerrarServicioElectronico");
+const mensajeServicioElectronico = document.getElementById("mensajeServicioElectronico");
 const modalEnvasesVenta = document.getElementById("modalEnvasesVenta");
 const listaEnvasesVenta = document.getElementById("listaEnvasesVenta");
 const resumenImportesEnvasesVenta = document.getElementById("resumenImportesEnvasesVenta");
@@ -61,6 +72,19 @@ const resumenEnvasesImportes = document.getElementById("resumenEnvasesImportes")
 const resumenEnvasesTotalCobrar = document.getElementById("resumenEnvasesTotalCobrar");
 const btnConfirmarEnvasesVenta = document.getElementById("btnConfirmarEnvasesVenta");
 const btnCancelarEnvasesVenta = document.getElementById("btnCancelarEnvasesVenta");
+const modalPagoMixto = document.getElementById("modalPagoMixto");
+const pagoMixtoTotalProductos = document.getElementById("pagoMixtoTotalProductos");
+const pagoMixtoTotalImportes = document.getElementById("pagoMixtoTotalImportes");
+const pagoMixtoRestante = document.getElementById("pagoMixtoRestante");
+const pagoMixtoEfectivo = document.getElementById("pagoMixtoEfectivo");
+const pagoMixtoTransferencia = document.getElementById("pagoMixtoTransferencia");
+const pagoMixtoFiado = document.getElementById("pagoMixtoFiado");
+const grupoPagoMixtoCliente = document.getElementById("grupoPagoMixtoCliente");
+const pagoMixtoCliente = document.getElementById("pagoMixtoCliente");
+const pagoMixtoObservaciones = document.getElementById("pagoMixtoObservaciones");
+const mensajePagoMixto = document.getElementById("mensajePagoMixto");
+const btnConfirmarPagoMixto = document.getElementById("btnConfirmarPagoMixto");
+const btnCancelarPagoMixto = document.getElementById("btnCancelarPagoMixto");
 const tituloModalManual = document.getElementById("tituloModalManual");
 const labelCantidadManual = document.getElementById("labelCantidadManual");
 
@@ -69,8 +93,12 @@ let carrito = [];
 let modoModalProducto = "peso";
 let promocionesActivas = [];
 let resolverEnvasesVenta = null;
+let resolverPagoMixto = null;
+let totalPagoMixtoActual = 0;
+let consecutivoLineaEspecial = 1;
 let ventaEnProceso = false;
 const redondeoOperativo = window.RedondeoOperativo;
+const importesEnvases = window.ImportesEnvases;
 let tiposEnvaseVenta = [];
 let overflowBodyAntesModalEnvases = "";
 
@@ -162,8 +190,34 @@ manualCantidad.step = "1";
   await cargarProductosManuales("suelto");
 });
 
+btnServicioElectronico?.addEventListener("click", () => {
+  abrirModalServicioElectronico("recarga");
+});
+
+btnTabRecarga?.addEventListener("click", () => {
+  mostrarPanelServicioElectronico("recarga");
+});
+
+btnTabServicio?.addEventListener("click", () => {
+  mostrarPanelServicioElectronico("servicio");
+});
+
+btnAgregarServicioElectronico?.addEventListener("click", () => {
+  const monto = Number(montoServicioElectronico.value);
+
+  if (!monto || monto <= 0) {
+    mensajeServicioElectronico.textContent = "Captura un monto valido.";
+    return;
+  }
+
+  agregarServicioAlCarrito("servicio", monto);
+});
+
+btnCerrarServicioElectronico?.addEventListener("click", cerrarModalServicioElectronico);
+
 btnGuardarNuevoDeudorVenta.addEventListener("click", crearDeudorDesdeVenta);
 cargarPromocionesActivas();
+renderBotonesRecarga();
 
 async function buscarProductoPorCodigo(codigo) {
   try {
@@ -310,6 +364,87 @@ function cerrarModalManual() {
   manualCantidad.value = "";
 }
 
+function renderBotonesRecarga() {
+  if (!montosRecarga) return;
+
+  const montos = [10, 15, 20, 25, 30, 50, 100, 200, 500];
+  montosRecarga.innerHTML = "";
+
+  montos.forEach((monto) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "bg-zinc-950 hover:bg-green-500 hover:text-black border border-zinc-700 rounded-xl py-4 font-black transition";
+    button.style.cssText = "border: 1px solid #3f3f46; border-radius: 12px; padding: 12px 8px; background: #09090b; font-weight: 900;";
+    button.innerHTML = `
+      <span class="block text-xl">$${monto}</span>
+      <span class="block text-xs text-zinc-400">cobra $${(monto + 1).toFixed(2)}</span>
+    `;
+    button.addEventListener("click", () => agregarServicioAlCarrito("recarga", monto));
+    montosRecarga.appendChild(button);
+  });
+}
+
+function abrirModalServicioElectronico(tipo) {
+  mensajeServicioElectronico.textContent = "";
+  montoServicioElectronico.value = "";
+  mostrarPanelServicioElectronico(tipo);
+  modalServicioElectronico.classList.remove("hidden");
+  modalServicioElectronico.classList.add("flex");
+}
+
+function cerrarModalServicioElectronico() {
+  modalServicioElectronico.classList.add("hidden");
+  modalServicioElectronico.classList.remove("flex");
+  montoServicioElectronico.value = "";
+}
+
+function mostrarPanelServicioElectronico(tipo) {
+  const esRecarga = tipo === "recarga";
+
+  panelRecarga.classList.toggle("hidden", !esRecarga);
+  panelServicio.classList.toggle("hidden", esRecarga);
+  btnTabRecarga.className = esRecarga
+    ? "rounded-xl py-3 font-bold bg-green-500 text-black"
+    : "rounded-xl py-3 font-bold bg-zinc-800 text-white";
+  btnTabServicio.className = esRecarga
+    ? "rounded-xl py-3 font-bold bg-zinc-800 text-white"
+    : "rounded-xl py-3 font-bold bg-green-500 text-black";
+}
+
+function agregarServicioAlCarrito(tipo, montoBase) {
+  const monto = redondearCentavos(montoBase);
+  const comision = tipo === "recarga" ? 1 : 0;
+  const total = redondearCentavos(monto + comision);
+  const nombre = tipo === "recarga"
+    ? `Recarga $${monto.toFixed(2)}`
+    : "Pago de servicio";
+
+  carrito.push({
+    carrito_id: `servicio-${Date.now()}-${consecutivoLineaEspecial++}`,
+    tipo_linea: "servicio_electronico",
+    servicio_tipo: tipo,
+    nombre,
+    cantidad: 1,
+    precio_unitario: total,
+    precio_unitario_original: total,
+    tipo_producto: tipo,
+    unidad: "servicio",
+    subtotal: total,
+    monto_base: monto,
+    comision,
+    promocion_aplicada: false,
+    texto_promocion: "",
+    descuento_promocion: 0,
+    es_retornable: 0,
+    tipo_envase_id: null,
+  });
+
+  recalcularCarrito();
+  renderCarrito();
+  cerrarModalServicioElectronico();
+  mostrarMensaje(`${nombre} agregado.`);
+}
+
 function agregarAlCarrito(producto) {
   const existente = carrito.find((item) => item.producto_id === producto.id);
 
@@ -348,6 +483,7 @@ function renderCarrito() {
 
   carrito.forEach((item) => {
     const tr = document.createElement("tr");
+    const itemKey = item.carrito_id || `producto-${item.producto_id}`;
 
     tr.innerHTML = `
 <td class="p-3">
@@ -364,6 +500,13 @@ function renderCarrito() {
     Number(item.es_retornable || 0) === 1
       ? `<div class="text-xs text-lime-300 font-bold mt-1">
           Retornable
+        </div>`
+      : ""
+  }
+  ${
+    item.tipo_linea === "servicio_electronico"
+      ? `<div class="text-xs text-cyan-300 font-bold mt-1">
+          ${item.servicio_tipo === "recarga" ? `Comision: $${Number(item.comision || 0).toFixed(2)}` : "Servicio electronico"}
         </div>`
       : ""
   }
@@ -403,14 +546,14 @@ function renderCarrito() {
 </td>
  <td class="p-3 text-right whitespace-nowrap">
   <button
-    onclick="quitarUno(${item.producto_id})"
+    onclick="quitarUno('${itemKey}')"
     class="bg-yellow-500 hover:bg-yellow-400 text-black px-3 py-1 rounded-lg font-bold mr-2"
   >
     -1
   </button>
 
   <button
-    onclick="eliminarItem(${item.producto_id})"
+    onclick="eliminarItem('${itemKey}')"
     class="bg-red-500 hover:bg-red-400 text-black px-3 py-1 rounded-lg font-bold"
   >
     Quitar
@@ -432,8 +575,12 @@ function renderCarrito() {
 
 
 
-function eliminarItem(productoId) {
-carrito = carrito.filter((item) => item.producto_id !== productoId);
+function obtenerClaveCarrito(item) {
+  return item.carrito_id || `producto-${item.producto_id}`;
+}
+
+function eliminarItem(itemKey) {
+carrito = carrito.filter((item) => obtenerClaveCarrito(item) !== itemKey);
 recalcularCarrito();
 renderCarrito();
 }
@@ -448,11 +595,24 @@ async function cobrarVenta() {
     return;
   }
 
-    const envasesVenta = await pedirEnvasesVenta();
+  const envasesVenta = await pedirEnvasesVenta();
 
   if (envasesVenta === null) {
     mostrarMensaje("Venta cancelada. Falta confirmar envases.");
     return;
+  }
+
+  const totalProductosVenta = obtenerTotalProductosVenta();
+  const totalImportesEnvase = calcularTotalImportesEnvases(envasesVenta);
+  let pagoMixto = null;
+
+  if (metodoPago.value === "mixto") {
+    pagoMixto = await pedirPagoMixto(totalProductosVenta, totalImportesEnvase);
+
+    if (pagoMixto === null) {
+      mostrarMensaje("Venta cancelada. Falta confirmar pago mixto.");
+      return;
+    }
   }
 
   const body = {
@@ -463,11 +623,20 @@ async function cobrarVenta() {
     cliente_fiado_id:
       metodoPago.value === "fiado" ? Number(clienteFiado.value) : null,
 
-    productos: carrito.map((item) => ({
-      producto_id: item.producto_id,
-      cantidad: item.cantidad,
-    })),
-      envases: envasesVenta,
+    productos: carrito
+      .filter((item) => item.tipo_linea !== "servicio_electronico")
+      .map((item) => ({
+        producto_id: item.producto_id,
+        cantidad: item.cantidad,
+      })),
+    servicios: carrito
+      .filter((item) => item.tipo_linea === "servicio_electronico")
+      .map((item) => ({
+        tipo: item.servicio_tipo,
+        monto_base: item.monto_base,
+      })),
+    envases: envasesVenta,
+    pago_mixto: pagoMixto,
   };
 
   try {
@@ -540,6 +709,100 @@ async function cobrarVenta() {
 
 function mostrarMensaje(texto) {
   mensaje.textContent = texto;
+}
+
+function redondearCentavos(monto) {
+  return Math.round(Number(monto || 0) * 100) / 100;
+}
+
+function obtenerTotalProductosVenta() {
+  return redondearCentavos(
+    carrito.reduce((total, item) => total + Number(item.subtotal || 0), 0),
+  );
+}
+
+function calcularTotalImportesEnvases(envases = []) {
+  return redondearCentavos(
+    envases.reduce((total, envase) => {
+      if (envase.escenario !== "dejo_importe") {
+        return total;
+      }
+
+      const tipoEnvase = obtenerTipoEnvaseVenta(envase.tipo_envase_id);
+      return total + importesEnvases.calcularImporteEnvase(
+        tipoEnvase,
+        Number(envase.cantidad || 0),
+      );
+    }, 0),
+  );
+}
+
+function obtenerMontosPagoMixto() {
+  return {
+    efectivo: redondearCentavos(pagoMixtoEfectivo?.value),
+    transferencia: redondearCentavos(pagoMixtoTransferencia?.value),
+    fiado: redondearCentavos(pagoMixtoFiado?.value),
+  };
+}
+
+function actualizarResumenPagoMixto() {
+  if (!modalPagoMixto) {
+    return;
+  }
+
+  const { efectivo, transferencia, fiado } = obtenerMontosPagoMixto();
+  const suma = redondearCentavos(efectivo + transferencia + fiado);
+  const restante = redondearCentavos(totalPagoMixtoActual - suma);
+
+  pagoMixtoRestante.textContent = `$${Math.abs(restante).toFixed(2)}`;
+  pagoMixtoRestante.classList.toggle("text-red-300", restante < 0);
+  pagoMixtoRestante.classList.toggle("text-green-400", restante >= 0);
+  grupoPagoMixtoCliente.classList.toggle("hidden", fiado <= 0);
+
+  if (fiado <= 0 && pagoMixtoCliente) {
+    pagoMixtoCliente.value = "";
+  }
+}
+
+function abrirModalPagoMixto(totalProductos, totalImportes) {
+  totalPagoMixtoActual = redondearCentavos(totalProductos);
+  pagoMixtoTotalProductos.textContent = `$${totalPagoMixtoActual.toFixed(2)}`;
+  pagoMixtoTotalImportes.textContent = `$${redondearCentavos(totalImportes).toFixed(2)}`;
+  pagoMixtoEfectivo.value = "";
+  pagoMixtoTransferencia.value = "";
+  pagoMixtoFiado.value = "";
+  pagoMixtoCliente.value = "";
+  pagoMixtoObservaciones.value = "";
+  mensajePagoMixto.textContent = totalImportes > 0
+    ? `El importe de envases ($${redondearCentavos(totalImportes).toFixed(2)}) se cobra aparte en efectivo o transferencia.`
+    : "";
+  actualizarResumenPagoMixto();
+
+  modalPagoMixto.classList.remove("hidden");
+  modalPagoMixto.classList.add("flex");
+}
+
+function cerrarModalPagoMixto() {
+  modalPagoMixto.classList.add("hidden");
+  modalPagoMixto.classList.remove("flex");
+}
+
+async function pedirPagoMixto(totalProductos, totalImportes) {
+  await cargarClientesFiado();
+
+  pagoMixtoCliente.innerHTML = `<option value="">Selecciona cliente...</option>`;
+  clientesFiado.forEach((cliente) => {
+    const option = document.createElement("option");
+    option.value = cliente.id;
+    option.textContent = `${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}`;
+    pagoMixtoCliente.appendChild(option);
+  });
+
+  abrirModalPagoMixto(totalProductos, totalImportes);
+
+  return new Promise((resolve) => {
+    resolverPagoMixto = resolve;
+  });
 }
 
 function redondearAMedioPeso(monto) {
@@ -696,19 +959,25 @@ async function cargarClientesFiado() {
   }
 }
 
-function quitarUno(productoId) {
+function quitarUno(itemKey) {
   const item = carrito.find(
-    (item) => Number(item.producto_id) === Number(productoId)
+    (item) => obtenerClaveCarrito(item) === itemKey
   );
 
   if (!item) return;
+
+  if (item.tipo_linea === "servicio_electronico") {
+    carrito = carrito.filter((item) => obtenerClaveCarrito(item) !== itemKey);
+    renderCarrito();
+    return;
+  }
 
   if (item.cantidad > 1) {
     item.cantidad -= 1;
     item.subtotal = item.cantidad * Number(item.precio_unitario);
   } else {
     carrito = carrito.filter(
-      (item) => Number(item.producto_id) !== Number(productoId)
+      (item) => obtenerClaveCarrito(item) !== itemKey
     );
   }
 
@@ -817,6 +1086,10 @@ function calcularPrecioConPromocion(item) {
 
 function recalcularCarrito() {
   carrito = carrito.map((item) => {
+    if (item.tipo_linea === "servicio_electronico") {
+      return item;
+    }
+
     const resultado = calcularPrecioConPromocion(item);
 
     return {
@@ -1045,9 +1318,10 @@ function actualizarResumenImportesEnvases() {
     }
 
     const tipoEnvase = obtenerTipoEnvaseVenta(item.tipo_envase_id);
-    const importeUnitario = Number(tipoEnvase?.importe || 0);
-
-    return sum + importeUnitario * Number(item.cantidad || 0);
+    return sum + importesEnvases.calcularImporteEnvase(
+      tipoEnvase,
+      Number(item.cantidad || 0)
+    );
   }, 0);
 
   if (totalImportes <= 0) {
@@ -1070,6 +1344,53 @@ btnCancelarEnvasesVenta?.addEventListener("click", () => {
   }
 });
 
+
+pagoMixtoEfectivo?.addEventListener("input", actualizarResumenPagoMixto);
+pagoMixtoTransferencia?.addEventListener("input", actualizarResumenPagoMixto);
+pagoMixtoFiado?.addEventListener("input", actualizarResumenPagoMixto);
+
+btnCancelarPagoMixto?.addEventListener("click", () => {
+  cerrarModalPagoMixto();
+
+  if (resolverPagoMixto) {
+    resolverPagoMixto(null);
+    resolverPagoMixto = null;
+  }
+});
+
+btnConfirmarPagoMixto?.addEventListener("click", () => {
+  const { efectivo, transferencia, fiado } = obtenerMontosPagoMixto();
+  const suma = redondearCentavos(efectivo + transferencia + fiado);
+
+  if (efectivo < 0 || transferencia < 0 || fiado < 0) {
+    mensajePagoMixto.textContent = "Los montos no pueden ser negativos.";
+    return;
+  }
+
+  if (Math.abs(suma - totalPagoMixtoActual) > 0.01) {
+    mensajePagoMixto.textContent = `El desglose debe sumar $${totalPagoMixtoActual.toFixed(2)} en productos.`;
+    actualizarResumenPagoMixto();
+    return;
+  }
+
+  if (fiado > 0 && !pagoMixtoCliente.value) {
+    mensajePagoMixto.textContent = "Selecciona cliente para la parte fiada.";
+    return;
+  }
+
+  cerrarModalPagoMixto();
+
+  if (resolverPagoMixto) {
+    resolverPagoMixto({
+      efectivo,
+      transferencia,
+      fiado,
+      cliente_fiado_id: fiado > 0 ? Number(pagoMixtoCliente.value) : null,
+      observaciones: pagoMixtoObservaciones.value.trim(),
+    });
+    resolverPagoMixto = null;
+  }
+});
 
 
 btnConfirmarEnvasesVenta?.addEventListener("click", () => {

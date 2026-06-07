@@ -14,6 +14,8 @@ if (!token || !usuario) {
 }
 
 const producto = document.getElementById("producto");
+const buscarProductoAjuste = document.getElementById("buscarProductoAjuste");
+const resultadosProductoAjuste = document.getElementById("resultadosProductoAjuste");
 const cantidadNueva = document.getElementById("cantidadNueva");
 const labelCantidadNueva = document.getElementById("labelCantidadNueva");
 const grupoPiezasSueltas = document.getElementById("grupoPiezasSueltas");
@@ -35,6 +37,17 @@ btnAjustar.addEventListener("click", async () => {
 });
 
 producto.addEventListener("change", actualizarCampoCantidad);
+buscarProductoAjuste?.addEventListener("input", renderResultadosProductoAjuste);
+buscarProductoAjuste?.addEventListener("focus", renderResultadosProductoAjuste);
+
+document.addEventListener("click", (event) => {
+  if (
+    !buscarProductoAjuste?.contains(event.target) &&
+    !resultadosProductoAjuste?.contains(event.target)
+  ) {
+    resultadosProductoAjuste?.classList.add("hidden");
+  }
+});
 
 cargarProductos();
 cargarAjustes();
@@ -72,6 +85,9 @@ async function cargarProductos() {
     });
 
     actualizarCampoCantidad();
+    if (productos.length > 0 && !buscarProductoAjuste.value) {
+      seleccionarProductoAjuste(productos[0], false);
+    }
 
   } catch (error) {
     mostrarMensaje("Error al cargar productos.");
@@ -215,6 +231,80 @@ function obtenerProductoSeleccionado() {
   return productos.find(
     (item) => Number(item.id) === Number(producto.value)
   );
+}
+
+function renderResultadosProductoAjuste() {
+  if (!resultadosProductoAjuste) return;
+
+  const texto = normalizarTexto(buscarProductoAjuste.value);
+  const filtrados = productos
+    .filter((item) => productoCoincideBusqueda(item, texto))
+    .slice(0, 10);
+
+  resultadosProductoAjuste.innerHTML = "";
+
+  if (filtrados.length === 0) {
+    resultadosProductoAjuste.innerHTML = `
+      <div class="p-4 text-sm text-zinc-500">No hay productos activos.</div>
+    `;
+    resultadosProductoAjuste.classList.remove("hidden");
+    return;
+  }
+
+  filtrados.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "w-full text-left px-4 py-3 hover:bg-zinc-900 border-b border-zinc-800 last:border-b-0";
+    const unidadesPorPaquete = obtenerUnidadesPorPaquete(item);
+    const nombreUnidad =
+      unidadesPorPaquete > 1 && Number(item.es_derivado || 0) === 0
+        ? item.presentacion || item.unidad
+        : item.unidad;
+
+    button.innerHTML = `
+      <div class="font-black">${item.nombre}</div>
+      <div class="text-xs text-zinc-500">
+        ${item.codigo_barras || "Sin codigo"}${item.marca ? ` - ${item.marca}` : ""}${item.categoria ? ` - ${item.categoria}` : ""}${item.presentacion ? ` - ${item.presentacion}` : ""}
+      </div>
+      <div class="text-xs text-zinc-400 mt-1">${nombreUnidad}</div>
+    `;
+    button.addEventListener("click", () => seleccionarProductoAjuste(item));
+    resultadosProductoAjuste.appendChild(button);
+  });
+
+  resultadosProductoAjuste.classList.remove("hidden");
+}
+
+function seleccionarProductoAjuste(item, enfocarCantidad = true) {
+  producto.value = item.id;
+  buscarProductoAjuste.value = `${item.nombre} - ${item.presentacion || item.unidad}`;
+  resultadosProductoAjuste?.classList.add("hidden");
+  actualizarCampoCantidad();
+
+  if (enfocarCantidad) {
+    cantidadNueva.focus();
+  }
+}
+
+function productoCoincideBusqueda(item, texto) {
+  if (!texto) return true;
+
+  return normalizarTexto([
+    item.nombre,
+    item.codigo_barras,
+    item.categoria,
+    item.marca,
+    item.presentacion,
+    item.unidad,
+  ].join(" ")).includes(texto);
+}
+
+function normalizarTexto(texto) {
+  return String(texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function actualizarCampoCantidad() {

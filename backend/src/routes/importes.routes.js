@@ -10,8 +10,11 @@ const {
   obtenerTiposEnvase,
   registrarImporte,
   obtenerImportes,
-devolverImporte,
-obtenerInventarioEnvases,
+  devolverImporte,
+  obtenerInventarioEnvases,
+  actualizarConfiguracionCajaEnvase,
+  registrarAjusteEnvases,
+  obtenerAjustesEnvases,
 } = require("../controllers/importes.controller");
 
 router.get(
@@ -29,6 +32,24 @@ router.get(
   "/inventario-envases",
   verificarToken,
   obtenerInventarioEnvases
+);
+
+router.get(
+  "/ajustes-envases",
+  verificarToken,
+  obtenerAjustesEnvases
+);
+
+router.post(
+  "/ajustes-envases",
+  verificarToken,
+  registrarAjusteEnvases
+);
+
+router.patch(
+  "/tipos-envase/:id/caja",
+  verificarToken,
+  actualizarConfiguracionCajaEnvase
 );
 
 router.post(

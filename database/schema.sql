@@ -105,6 +105,30 @@ CREATE TABLE IF NOT EXISTS venta_detalles (
   FOREIGN KEY (promocion_id) REFERENCES promociones(id)
 );
 
+CREATE TABLE IF NOT EXISTS venta_pagos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  venta_id INTEGER NOT NULL,
+  metodo_pago TEXT NOT NULL CHECK (metodo_pago IN ('efectivo', 'transferencia', 'fiado')),
+  monto REAL NOT NULL,
+  cliente_fiado_id INTEGER,
+  observaciones TEXT,
+  fecha_registro TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (venta_id) REFERENCES ventas(id),
+  FOREIGN KEY (cliente_fiado_id) REFERENCES clientes_fiado(id)
+);
+
+CREATE TABLE IF NOT EXISTS venta_servicios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  venta_id INTEGER NOT NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN ('recarga', 'servicio')),
+  descripcion TEXT NOT NULL,
+  monto_base REAL NOT NULL,
+  comision REAL NOT NULL DEFAULT 0,
+  total_cobrado REAL NOT NULL,
+  fecha_registro TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (venta_id) REFERENCES ventas(id)
+);
+
 
 CREATE TABLE IF NOT EXISTS entradas_mercancia (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -344,6 +368,8 @@ CREATE TABLE IF NOT EXISTS tipos_envase (
   categoria TEXT NOT NULL,
   nombre TEXT NOT NULL,
   importe REAL NOT NULL,
+  cantidad_por_caja INTEGER,
+  importe_por_caja REAL,
   activo INTEGER NOT NULL DEFAULT 1
 );
 
@@ -353,6 +379,23 @@ CREATE TABLE IF NOT EXISTS inventario_envases (
   tipo_envase_id INTEGER NOT NULL,
   cantidad_vacios INTEGER NOT NULL DEFAULT 0,
   UNIQUE(tienda_id, tipo_envase_id)
+);
+
+CREATE TABLE IF NOT EXISTS ajustes_envases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tienda_id INTEGER NOT NULL,
+  usuario_id INTEGER NOT NULL,
+  tipo_envase_id INTEGER NOT NULL,
+  cantidad_anterior INTEGER NOT NULL,
+  cantidad_nueva INTEGER NOT NULL,
+  diferencia INTEGER NOT NULL,
+  modo TEXT NOT NULL CHECK (modo IN ('sumar', 'restar', 'definir')),
+  motivo TEXT NOT NULL,
+  observaciones TEXT,
+  fecha_ajuste TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (tienda_id) REFERENCES tiendas(id),
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  FOREIGN KEY (tipo_envase_id) REFERENCES tipos_envase(id)
 );
 
 CREATE TABLE IF NOT EXISTS importes_envases (

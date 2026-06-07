@@ -10,6 +10,41 @@ const FILTRO_ABONOS_ENVASE = `
   AND COALESCE(a.observaciones, '') NOT LIKE 'Cancelacion de envase por devolucion%'
 `;
 
+const calcularEstadoCliente = (clienteId, callback) => {
+  db.get(
+    `
+    SELECT
+      COALESCE((
+        SELECT SUM(f.monto)
+        FROM fiados f
+        WHERE f.cliente_id = c.id
+        ${FILTRO_DEUDAS_ENVASE}
+      ), 0)
+
+      -
+
+      COALESCE((
+        SELECT SUM(a.monto)
+        FROM abonos_fiado a
+        WHERE a.cliente_id = c.id
+        ${FILTRO_ABONOS_ENVASE}
+      ), 0) AS deuda_total,
+
+      COALESCE((
+        SELECT SUM(i.cantidad_pendiente)
+        FROM importes_envases i
+        WHERE i.cliente_fiado_id = c.id
+        AND i.escenario = 'envase_prestado'
+        AND i.estado = 'pendiente'
+      ), 0) AS envases_pendientes
+    FROM clientes_fiado c
+    WHERE c.id = ?
+    `,
+    [clienteId],
+    callback
+  );
+};
+
 const crearClienteFiado = (req, res) => {
   const {
     nombre_completo,
@@ -49,6 +84,121 @@ const crearClienteFiado = (req, res) => {
       mensaje: "Cliente creado",
       id: this.lastID,
     });
+  });
+};
+
+const actualizarClienteFiado = (req, res) => {
+  const { id } = req.params;
+  const {
+    nombre_completo,
+    apodo,
+    telefono,
+    limite_credito,
+  } = req.body;
+
+  const nombre = String(nombre_completo || "").trim();
+
+  if (!nombre) {
+    return res.status(400).json({
+      error: "Nombre obligatorio",
+    });
+  }
+
+  db.run(
+    `
+    UPDATE clientes_fiado
+    SET
+      nombre_completo = ?,
+      apodo = ?,
+      telefono = ?,
+      limite_credito = ?
+    WHERE id = ?
+    AND activo = 1
+    `,
+    [
+      nombre,
+      String(apodo || "").trim() || null,
+      String(telefono || "").trim() || null,
+      Number(limite_credito) || 0,
+      id,
+    ],
+    function (error) {
+      if (error) {
+        return res.status(500).json({
+          error: "Error al actualizar cliente",
+        });
+      }
+
+      if (this.changes === 0) {
+        return res.status(404).json({
+          error: "Cliente no encontrado o inactivo",
+        });
+      }
+
+      res.json({
+        mensaje: "Cliente actualizado correctamente",
+      });
+    }
+  );
+};
+
+const desactivarClienteFiado = (req, res) => {
+  const { id } = req.params;
+
+  calcularEstadoCliente(id, (errorEstado, estadoCliente) => {
+    if (errorEstado) {
+      return res.status(500).json({
+        error: "Error al validar cliente",
+      });
+    }
+
+    if (!estadoCliente) {
+      return res.status(404).json({
+        error: "Cliente no encontrado",
+      });
+    }
+
+    const deuda = Number(estadoCliente.deuda_total || 0);
+    const envasesPendientes = Number(estadoCliente.envases_pendientes || 0);
+
+    if (deuda > 0) {
+      return res.status(400).json({
+        error: "No puedes desactivar un cliente con saldo fiado pendiente",
+      });
+    }
+
+    if (envasesPendientes > 0) {
+      return res.status(400).json({
+        error: "No puedes desactivar un cliente con envases pendientes",
+      });
+    }
+
+    db.run(
+      `
+      UPDATE clientes_fiado
+      SET activo = 0
+      WHERE id = ?
+      AND activo = 1
+      `,
+      [id],
+      function (errorUpdate) {
+        if (errorUpdate) {
+          return res.status(500).json({
+            error: "Error al desactivar cliente",
+          });
+        }
+
+        if (this.changes === 0) {
+          return res.status(404).json({
+            error: "Cliente no encontrado o ya inactivo",
+          });
+        }
+
+        res.json({
+          mensaje: "Cliente desactivado correctamente",
+        });
+      }
+    );
   });
 };
 
@@ -306,6 +456,8 @@ const obtenerHistorialCliente = (req, res) => {
 module.exports = {
   crearClienteFiado,
   obtenerClientesFiado,
+  actualizarClienteFiado,
+  desactivarClienteFiado,
   registrarFiado,
   registrarAbono,
   obtenerHistorialCliente,

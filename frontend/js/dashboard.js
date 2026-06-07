@@ -77,6 +77,7 @@ function inicializarActualizador() {
   }
 
   const updateBox = document.getElementById("updateBox");
+  const updateTitulo = document.getElementById("updateTitulo");
   const updateVersion = document.getElementById("updateVersion");
   const updateProgress = document.getElementById("updateProgress");
   const btnDescargarUpdate = document.getElementById("btnDescargarUpdate");
@@ -85,6 +86,7 @@ function inicializarActualizador() {
 
   if (
     !updateBox ||
+    !updateTitulo ||
     !updateVersion ||
     !updateProgress ||
     !btnDescargarUpdate ||
@@ -93,14 +95,60 @@ function inicializarActualizador() {
     return;
   }
 
-  window.actualizador.cuandoHayUpdate((data) => {
+  function mostrarEstadoActualizador(estado, opciones = {}) {
     updateBox.classList.remove("hidden");
-    updateVersion.textContent = `Version nueva disponible: ${data.version}`;
-    updateProgress.textContent =
-      "Puedes descargarla cuando no haya clientes esperando.";
+    updateVersion.textContent = "";
+    updateProgress.textContent = "";
+    btnDescargarUpdate.classList.add("hidden");
+    btnInstalarUpdate.classList.add("hidden");
+    btnDescargarUpdate.disabled = false;
+
+    if (estado === "buscando") {
+      updateBox.className =
+        "mb-8 rounded-2xl border border-zinc-500 bg-zinc-100 p-4 text-zinc-900";
+      updateTitulo.textContent = "Buscando actualizaciones...";
+      updateProgress.textContent = "Consultando la version mas reciente.";
+      return;
+    }
+
+    if (estado === "actualizado") {
+      updateBox.className =
+        "mb-8 rounded-2xl border border-green-300 bg-green-50 p-4 text-green-900";
+      updateTitulo.textContent = "Estas actualizado";
+      updateProgress.textContent = "No hay actualizaciones disponibles.";
+      return;
+    }
+
+    if (estado === "disponible") {
+      updateBox.className =
+        "mb-8 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 text-yellow-900";
+      updateTitulo.textContent = "Nueva actualizacion disponible";
+      updateVersion.textContent = opciones.version
+        ? `Version nueva disponible: ${opciones.version}`
+        : "";
+      updateProgress.textContent =
+        "Puedes descargarla cuando no haya clientes esperando.";
+      btnDescargarUpdate.classList.remove("hidden");
+      return;
+    }
+
+    if (estado === "error") {
+      updateBox.className =
+        "mb-8 rounded-2xl border border-red-300 bg-red-50 p-4 text-red-900";
+      updateTitulo.textContent =
+        "No se pudo verificar actualizacion. Revisa tu conexion.";
+      updateProgress.textContent = opciones.mensaje || "";
+    }
+  }
+
+  window.actualizador.cuandoHayUpdate((data) => {
+    mostrarEstadoActualizador("disponible", {
+      version: data.version,
+    });
   });
 
   window.actualizador.progreso((data) => {
+    btnDescargarUpdate.classList.add("hidden");
     updateProgress.textContent = `Descargando actualizacion: ${data.percent}%`;
   });
 
@@ -112,20 +160,45 @@ function inicializarActualizador() {
   });
 
   window.actualizador.cuandoError((data) => {
-    updateBox.classList.remove("hidden");
-    updateProgress.textContent = `Error al actualizar: ${data.mensaje}`;
-    btnDescargarUpdate.disabled = false;
+    mostrarEstadoActualizador("error", {
+      mensaje: data.mensaje,
+    });
   });
 
-  btnRevisarUpdate?.addEventListener("click", async () => {
-    updateBox.classList.remove("hidden");
-    updateProgress.textContent = "Buscando actualizacion...";
+  async function revisarActualizacion(mostrarResultadoActualizado = true) {
+    mostrarEstadoActualizador("buscando");
 
     try {
-      await window.actualizador.revisar();
+      const respuesta = await window.actualizador.revisar();
+
+      if (!respuesta.ok || respuesta.estado === "error") {
+        mostrarEstadoActualizador("error", {
+          mensaje: respuesta.mensaje,
+        });
+        return;
+      }
+
+      if (respuesta.estado === "disponible") {
+        mostrarEstadoActualizador("disponible", {
+          version: respuesta.version,
+        });
+        return;
+      }
+
+      if (mostrarResultadoActualizado) {
+        mostrarEstadoActualizador("actualizado");
+      } else {
+        updateBox.classList.add("hidden");
+      }
     } catch (error) {
-      updateProgress.textContent = "No se pudo revisar la actualizacion.";
+      mostrarEstadoActualizador("error", {
+        mensaje: error.message,
+      });
     }
+  }
+
+  btnRevisarUpdate?.addEventListener("click", async () => {
+    await revisarActualizacion(true);
   });
 
   btnDescargarUpdate.addEventListener("click", async () => {
@@ -152,7 +225,7 @@ function inicializarActualizador() {
   });
 
   setTimeout(() => {
-    window.actualizador.revisar().catch((error) => {
+    revisarActualizacion(false).catch((error) => {
       console.log("No se pudo revisar actualizacion:", error);
     });
   }, 3000);

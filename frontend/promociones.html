@@ -39,14 +39,26 @@
       </h2>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div>
+        <div class="relative">
           <label class="block text-sm text-zinc-400 mb-2">
             Producto
           </label>
 
+          <input
+            id="buscarProductoPromocion"
+            type="text"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-white"
+            placeholder="Buscar por nombre, marca, categoria o codigo..."
+          />
+
+          <div
+            id="resultadosProductoPromocion"
+            class="hidden absolute z-40 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl"
+          ></div>
+
           <select
             id="productoPromocion"
-            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+            class="hidden"
           >
             <option value="">Cargando productos...</option>
           </select>

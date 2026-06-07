@@ -24,6 +24,8 @@ const contenedorClientes = document.getElementById("contenedorClientes");
 const detalleCliente = document.getElementById("detalleCliente");
 const detalleTitulo = document.getElementById("detalleTitulo");
 const detalleInfo = document.getElementById("detalleInfo");
+const btnEditarCliente = document.getElementById("btnEditarCliente");
+const btnDesactivarCliente = document.getElementById("btnDesactivarCliente");
 
 const conceptoFiado = document.getElementById("conceptoFiado");
 const montoFiado = document.getElementById("montoFiado");
@@ -34,13 +36,26 @@ const observacionesAbono = document.getElementById("observacionesAbono");
 const btnRegistrarAbono = document.getElementById("btnRegistrarAbono");
 
 const tablaHistorial = document.getElementById("tablaHistorial");
+const modalEditarCliente = document.getElementById("modalEditarCliente");
+const editarNombreCompleto = document.getElementById("editarNombreCompleto");
+const editarApodo = document.getElementById("editarApodo");
+const editarTelefono = document.getElementById("editarTelefono");
+const editarLimiteCredito = document.getElementById("editarLimiteCredito");
+const mensajeEditarCliente = document.getElementById("mensajeEditarCliente");
+const btnCancelarEditarCliente = document.getElementById("btnCancelarEditarCliente");
+const btnGuardarEditarCliente = document.getElementById("btnGuardarEditarCliente");
 
 let clienteSeleccionado = null;
 let clientes = [];
+let edicionClienteEnProceso = false;
 
 btnCrearCliente.addEventListener("click", crearCliente);
 btnRegistrarFiado.addEventListener("click", registrarFiado);
 btnRegistrarAbono.addEventListener("click", registrarAbono);
+btnEditarCliente?.addEventListener("click", abrirModalEditarCliente);
+btnDesactivarCliente?.addEventListener("click", desactivarClienteSeleccionado);
+btnCancelarEditarCliente?.addEventListener("click", cerrarModalEditarCliente);
+btnGuardarEditarCliente?.addEventListener("click", guardarEdicionCliente);
 
 cargarClientes();
 
@@ -171,6 +186,120 @@ function seleccionarCliente(cliente) {
     `Debe dinero $${deuda.toFixed(2)} de limite $${limite.toFixed(2)}. Envases pendientes: ${envasesPendientes}. Tel: ${cliente.telefono || "-"}`;
 
   cargarHistorial(cliente.id);
+}
+
+function abrirModalEditarCliente() {
+  if (!clienteSeleccionado) return;
+
+  editarNombreCompleto.value = clienteSeleccionado.nombre_completo || "";
+  editarApodo.value = clienteSeleccionado.apodo || "";
+  editarTelefono.value = clienteSeleccionado.telefono || "";
+  editarLimiteCredito.value = Number(clienteSeleccionado.limite_credito || 0);
+  mensajeEditarCliente.textContent = "";
+  modalEditarCliente.classList.remove("hidden");
+
+  setTimeout(() => {
+    editarNombreCompleto.focus();
+  }, 100);
+}
+
+function cerrarModalEditarCliente() {
+  if (edicionClienteEnProceso) return;
+
+  modalEditarCliente.classList.add("hidden");
+}
+
+async function guardarEdicionCliente() {
+  if (edicionClienteEnProceso || !clienteSeleccionado) return;
+
+  const body = {
+    nombre_completo: editarNombreCompleto.value.trim(),
+    apodo: editarApodo.value.trim(),
+    telefono: editarTelefono.value.trim(),
+    limite_credito: Number(editarLimiteCredito.value) || 0,
+  };
+
+  if (!body.nombre_completo) {
+    mensajeEditarCliente.textContent = "El nombre completo es obligatorio.";
+    return;
+  }
+
+  edicionClienteEnProceso = true;
+  btnGuardarEditarCliente.disabled = true;
+  btnGuardarEditarCliente.textContent = "Guardando...";
+
+  try {
+    const response = await fetch(`${API_URL}/fiados/clientes/${clienteSeleccionado.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      mensajeEditarCliente.textContent = data.error || "Error al actualizar cliente.";
+      return;
+    }
+
+    mostrarMensaje(data.mensaje || "Cliente actualizado correctamente.");
+    edicionClienteEnProceso = false;
+    cerrarModalEditarCliente();
+
+    await cargarClientes();
+    const actualizado = clientes.find(
+      (cliente) => Number(cliente.id) === Number(clienteSeleccionado.id)
+    );
+
+    if (actualizado) {
+      seleccionarCliente(actualizado);
+    }
+  } catch (error) {
+    mensajeEditarCliente.textContent = "Error al conectar.";
+  } finally {
+    edicionClienteEnProceso = false;
+    btnGuardarEditarCliente.disabled = false;
+    btnGuardarEditarCliente.textContent = "Guardar cambios";
+  }
+}
+
+async function desactivarClienteSeleccionado() {
+  if (!clienteSeleccionado) return;
+
+  const confirmar = confirm(
+    `Desactivar a ${clienteSeleccionado.nombre_completo}? Su historial se conservara.`
+  );
+
+  if (!confirmar) return;
+
+  try {
+    const response = await fetch(
+      `${API_URL}/fiados/clientes/${clienteSeleccionado.id}/desactivar`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      mostrarMensaje(data.error || "Error al desactivar cliente.");
+      return;
+    }
+
+    mostrarMensaje(data.mensaje || "Cliente desactivado correctamente.");
+    clienteSeleccionado = null;
+    detalleCliente.classList.add("hidden");
+    await cargarClientes();
+  } catch (error) {
+    mostrarMensaje("Error al conectar.");
+  }
 }
 
 async function cargarHistorial(clienteId) {

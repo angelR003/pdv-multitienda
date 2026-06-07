@@ -19,6 +19,10 @@ const obtenerProductosElegibles = (req, res) => {
     SELECT
       id,
       nombre,
+      codigo_barras,
+      categoria,
+      marca,
+      presentacion,
       tipo_producto,
       es_derivado,
       unidad,

@@ -112,20 +112,53 @@ async function consultarVentasPorDia(filtros) {
 
 async function consultarMetodosPago(filtros) {
   const fechaVentaLocal = fechaLocalSql("v", "fecha_venta");
+  const tiendaSql = filtros.tiendaId ? "AND v.tienda_id = ?" : "";
   const params = [filtros.fechaInicio, filtros.fechaFin];
-  const tiendaSql = filtroTienda("v", filtros.tiendaId, params);
+
+  if (filtros.tiendaId) {
+    params.push(filtros.tiendaId);
+  }
+
+  params.push(filtros.fechaInicio, filtros.fechaFin);
+
+  if (filtros.tiendaId) {
+    params.push(filtros.tiendaId);
+  }
 
   return all(
     `
     SELECT
-      v.metodo_pago,
-      COUNT(*) AS total_ventas,
-      COALESCE(SUM(v.total), 0) AS total
-    FROM ventas v
-    WHERE ${fechaVentaLocal} BETWEEN ? AND ?
-    AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
-    ${tiendaSql}
-    GROUP BY v.metodo_pago
+      metodo_pago,
+      COALESCE(SUM(total_ventas), 0) AS total_ventas,
+      COALESCE(SUM(total), 0) AS total
+    FROM (
+      SELECT
+        v.metodo_pago,
+        COUNT(*) AS total_ventas,
+        COALESCE(SUM(v.total), 0) AS total
+      FROM ventas v
+      WHERE ${fechaVentaLocal} BETWEEN ? AND ?
+      AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
+      AND v.metodo_pago != 'mixto'
+      ${tiendaSql}
+      GROUP BY v.metodo_pago
+
+      UNION ALL
+
+      SELECT
+        vp.metodo_pago,
+        COUNT(DISTINCT v.id) AS total_ventas,
+        COALESCE(SUM(vp.monto), 0) AS total
+      FROM venta_pagos vp
+      INNER JOIN ventas v
+        ON v.id = vp.venta_id
+      WHERE ${fechaVentaLocal} BETWEEN ? AND ?
+      AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
+      AND v.metodo_pago = 'mixto'
+      ${tiendaSql}
+      GROUP BY vp.metodo_pago
+    )
+    GROUP BY metodo_pago
     ORDER BY total DESC
     `,
     params
@@ -206,6 +239,30 @@ async function consultarResumen(filtros) {
     `,
     paramsVentas
   );
+
+  const paramsPagosMixtos = [filtros.fechaInicio, filtros.fechaFin];
+  const tiendaPagosMixtosSql = filtroTienda("v", filtros.tiendaId, paramsPagosMixtos);
+
+  const pagosMixtos = await get(
+    `
+    SELECT
+      COALESCE(SUM(CASE WHEN vp.metodo_pago = 'efectivo' THEN vp.monto ELSE 0 END), 0) AS mixto_efectivo,
+      COALESCE(SUM(CASE WHEN vp.metodo_pago = 'transferencia' THEN vp.monto ELSE 0 END), 0) AS mixto_transferencia,
+      COALESCE(SUM(CASE WHEN vp.metodo_pago = 'fiado' THEN vp.monto ELSE 0 END), 0) AS mixto_fiado
+    FROM venta_pagos vp
+    INNER JOIN ventas v
+      ON v.id = vp.venta_id
+    WHERE ${fechaVentaLocal} BETWEEN ? AND ?
+    AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
+    AND v.metodo_pago = 'mixto'
+    ${tiendaPagosMixtosSql}
+    `,
+    paramsPagosMixtos
+  );
+
+  ventas.total_efectivo = Number(ventas.total_efectivo || 0) + Number(pagosMixtos.mixto_efectivo || 0);
+  ventas.total_transferencia = Number(ventas.total_transferencia || 0) + Number(pagosMixtos.mixto_transferencia || 0);
+  ventas.total_fiado = Number(ventas.total_fiado || 0) + Number(pagosMixtos.mixto_fiado || 0);
 
   const paramsDevoluciones = [filtros.fechaInicio, filtros.fechaFin];
   const tiendaDevolucionesSql = filtroTienda("d", filtros.tiendaId, paramsDevoluciones);

@@ -3,6 +3,8 @@ const express = require("express");
 const {
   crearClienteFiado,
   obtenerClientesFiado,
+  actualizarClienteFiado,
+  desactivarClienteFiado,
   registrarFiado,
   registrarAbono,
   obtenerHistorialCliente,
@@ -24,6 +26,18 @@ router.post(
   "/clientes",
   verificarToken,
   crearClienteFiado
+);
+
+router.patch(
+  "/clientes/:id",
+  verificarToken,
+  actualizarClienteFiado
+);
+
+router.patch(
+  "/clientes/:id/desactivar",
+  verificarToken,
+  desactivarClienteFiado
 );
 
 router.post(

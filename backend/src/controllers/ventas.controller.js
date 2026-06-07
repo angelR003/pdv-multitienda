@@ -3,6 +3,7 @@ const {
   calcularSubtotalOperativo,
   esProductoAGranel,
 } = require("../../../frontend/js/redondeo-operativo");
+const { calcularImporteEnvase } = require("../utils/importes-envases");
 
 const calcularPromocionProducto = (cantidad, precioNormal, promocion) => {
   const cantidadNumero = Number(cantidad);
@@ -70,6 +71,113 @@ const escenariosEnvaseValidos = [
   "dejo_importe",
   "envase_prestado",
 ];
+
+const redondearCentavos = (monto) => {
+  return Math.round(Number(monto || 0) * 100) / 100;
+};
+
+const validarPagoMixto = (pagoMixto, totalProductos) => {
+  const efectivo = redondearCentavos(pagoMixto?.efectivo);
+  const transferencia = redondearCentavos(pagoMixto?.transferencia);
+  const fiado = redondearCentavos(pagoMixto?.fiado);
+  const total = redondearCentavos(totalProductos);
+  const clienteFiadoId = pagoMixto?.cliente_fiado_id
+    ? Number(pagoMixto.cliente_fiado_id)
+    : null;
+
+  if (efectivo < 0 || transferencia < 0 || fiado < 0) {
+    return {
+      error: "Los montos del pago mixto no pueden ser negativos",
+    };
+  }
+
+  const suma = redondearCentavos(efectivo + transferencia + fiado);
+
+  if (Math.abs(suma - total) > 0.01) {
+    return {
+      error: "El pago mixto debe sumar exactamente el total de la venta",
+    };
+  }
+
+  if (fiado > 0 && !clienteFiadoId) {
+    return {
+      error: "Selecciona cliente fiado para el pago mixto",
+    };
+  }
+
+  return {
+    pago: {
+      efectivo,
+      transferencia,
+      fiado,
+      clienteFiadoId,
+      observaciones: String(pagoMixto?.observaciones || "").trim() || null,
+    },
+  };
+};
+
+const prepararServiciosVenta = (servicios = []) => {
+  if (!Array.isArray(servicios)) {
+    return {
+      error: "Servicios invalidos en la venta",
+      servicios: [],
+      total: 0,
+    };
+  }
+
+  const preparados = [];
+  let total = 0;
+
+  for (const item of servicios) {
+    const tipo = String(item.tipo || "").trim();
+    const montoBase = redondearCentavos(item.monto_base);
+
+    if (!["recarga", "servicio"].includes(tipo)) {
+      return {
+        error: "Tipo de servicio invalido",
+      };
+    }
+
+    if (!montoBase || montoBase <= 0) {
+      return {
+        error: "El monto del servicio debe ser mayor a cero",
+      };
+    }
+
+    const comision = tipo === "recarga" ? 1 : 0;
+    const totalCobrado = redondearCentavos(montoBase + comision);
+    const descripcion =
+      tipo === "recarga"
+        ? `Recarga $${montoBase.toFixed(2)}`
+        : `Pago de servicio`;
+
+    preparados.push({
+      tipo,
+      descripcion,
+      monto_base: montoBase,
+      comision,
+      total_cobrado: totalCobrado,
+    });
+
+    total += totalCobrado;
+  }
+
+  return {
+    servicios: preparados,
+    total: redondearCentavos(total),
+  };
+};
+
+const crearConceptoLineasVenta = (detalles = [], servicios = []) => {
+  const conceptosProductos = detalles.map(
+    (item) => `${item.cantidad} ${item.nombre_producto || "producto"}`
+  );
+
+  const conceptosServicios = servicios.map((item) => item.descripcion);
+
+  return conceptosProductos.concat(conceptosServicios).join(", ");
+};
+
 const registrarEnvasesVenta = ({ tienda_id, usuario_id, folio, envases }, callback) => {
   if (!Array.isArray(envases) || envases.length === 0) {
     callback();
@@ -161,7 +269,7 @@ const registrarEnvasesVenta = ({ tienda_id, usuario_id, folio, envases }, callba
           const importeUnitario = Number(tipoEnvase.importe);
           const importeTotal =
             envase.escenario === "dejo_importe"
-              ? importeUnitario * cantidad
+              ? calcularImporteEnvase(tipoEnvase, cantidad)
               : 0;
 
           db.run(
@@ -286,9 +394,21 @@ const crearVenta = (req, res) => {
     productos,
     cliente_fiado_id,
     envases,
+    pago_mixto,
+    servicios,
   } = req.body;
 
   const envasesVenta = Array.isArray(envases) ? envases : [];
+  const resultadoServicios = prepararServiciosVenta(servicios);
+
+  if (resultadoServicios.error) {
+    return res.status(400).json({
+      error: resultadoServicios.error,
+    });
+  }
+
+  const serviciosVenta = resultadoServicios.servicios;
+  const totalServiciosVenta = resultadoServicios.total;
 
   if (metodo_pago === "fiado" && !cliente_fiado_id) {
     return res.status(400).json({
@@ -301,7 +421,7 @@ const crearVenta = (req, res) => {
     !usuario_id ||
     !metodo_pago ||
     !Array.isArray(productos) ||
-    productos.length === 0
+    (productos.length === 0 && serviciosVenta.length === 0)
   ) {
     return res.status(400).json({
       error: "Datos incompletos para registrar la venta",
@@ -323,6 +443,7 @@ const crearVenta = (req, res) => {
 
     const procesarProducto = (index) => {
       if (index >= productos.length) {
+        subtotalVenta = redondearCentavos(subtotalVenta + totalServiciosVenta);
         validarInventarioAgrupado();
         return;
       }
@@ -551,6 +672,11 @@ db.get(
 
       const pendientes = Array.from(requeridos.entries());
 
+      if (pendientes.length === 0) {
+        guardarVenta();
+        return;
+      }
+
       const revisar = (index) => {
         if (index >= pendientes.length) {
           guardarVenta();
@@ -591,6 +717,18 @@ db.get(
     };
 
     const guardarVenta = () => {
+      let pagoMixtoValidado = null;
+
+      if (metodo_pago === "mixto") {
+        const resultadoPagoMixto = validarPagoMixto(pago_mixto, subtotalVenta);
+
+        if (resultadoPagoMixto.error) {
+          return rollback(res, resultadoPagoMixto.error);
+        }
+
+        pagoMixtoValidado = resultadoPagoMixto.pago;
+      }
+
       db.run(
         `
         INSERT INTO ventas (
@@ -618,10 +756,33 @@ db.get(
           const ventaId = this.lastID;
           const continuarGuardandoDetalles = () => guardarDetalles(ventaId, 0);
 
+          if (metodo_pago === "mixto") {
+            return registrarPagoMixtoVenta(
+              {
+                ventaId,
+                tienda_id,
+                usuario_id,
+                folio,
+                detalles,
+                servicios: serviciosVenta,
+                subtotalVenta,
+                pago: pagoMixtoValidado,
+              },
+              (errorPagoMixto) => {
+                if (errorPagoMixto) {
+                  return rollback(res, errorPagoMixto);
+                }
+
+                continuarGuardandoDetalles();
+              }
+            );
+          }
+
           if (metodo_pago === "fiado") {
-            const conceptoFiado = productos
-              .map((item) => `${item.cantidad} ${item.nombre || "producto"}`)
-              .join(", ");
+            const conceptoFiado = crearConceptoLineasVenta(
+              detalles,
+              serviciosVenta
+            );
 
             return db.run(
               `
@@ -658,30 +819,36 @@ db.get(
 
     const guardarDetalles = (ventaId, index) => {
       if (index >= detalles.length) {
-        registrarEnvasesVenta(
-          {
-            tienda_id,
-            usuario_id,
-            folio,
-            envases: envasesVenta,
-          },
-          (errorEnvases) => {
-            if (errorEnvases) {
-              return rollback(res, errorEnvases);
-            }
-
-            db.run("COMMIT", (error) => {
-              if (error) return rollback(res, "Error al confirmar venta");
-
-              return res.status(201).json({
-                mensaje: "Venta registrada correctamente",
-                venta_id: ventaId,
-                folio,
-                total: subtotalVenta,
-              });
-            });
+        guardarServiciosVenta(ventaId, 0, (errorServicios) => {
+          if (errorServicios) {
+            return rollback(res, errorServicios);
           }
-        );
+
+          registrarEnvasesVenta(
+            {
+              tienda_id,
+              usuario_id,
+              folio,
+              envases: envasesVenta,
+            },
+            (errorEnvases) => {
+              if (errorEnvases) {
+                return rollback(res, errorEnvases);
+              }
+
+              db.run("COMMIT", (error) => {
+                if (error) return rollback(res, "Error al confirmar venta");
+
+                return res.status(201).json({
+                  mensaje: "Venta registrada correctamente",
+                  venta_id: ventaId,
+                  folio,
+                  total: subtotalVenta,
+                });
+              });
+            }
+          );
+        });
 
         return;
       }
@@ -760,9 +927,181 @@ AND cantidad_actual >= ?
       );
     };
 
+    const guardarServiciosVenta = (ventaId, index, callback) => {
+      if (index >= serviciosVenta.length) {
+        callback();
+        return;
+      }
+
+      const servicio = serviciosVenta[index];
+
+      db.run(
+        `
+        INSERT INTO venta_servicios (
+          venta_id,
+          tipo,
+          descripcion,
+          monto_base,
+          comision,
+          total_cobrado
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [
+          ventaId,
+          servicio.tipo,
+          servicio.descripcion,
+          servicio.monto_base,
+          servicio.comision,
+          servicio.total_cobrado,
+        ],
+        (errorServicio) => {
+          if (errorServicio) {
+            callback("Error al guardar servicio de venta");
+            return;
+          }
+
+          guardarServiciosVenta(ventaId, index + 1, callback);
+        }
+      );
+    };
+
     procesarProducto(0);
     });
   });
+};
+
+const registrarPagoMixtoVenta = (
+  {
+    ventaId,
+    tienda_id,
+    usuario_id,
+    folio,
+    detalles,
+    servicios,
+    subtotalVenta,
+    pago,
+  },
+  callback
+) => {
+  const pagos = [
+    { metodo: "efectivo", monto: pago.efectivo },
+    { metodo: "transferencia", monto: pago.transferencia },
+    { metodo: "fiado", monto: pago.fiado },
+  ].filter((item) => item.monto > 0);
+
+  const conceptoFiado = crearConceptoLineasVenta(detalles, servicios);
+
+  const guardarPago = (index) => {
+    if (index >= pagos.length) {
+      callback();
+      return;
+    }
+
+    const item = pagos[index];
+    const clienteFiadoId = item.metodo === "fiado" ? pago.clienteFiadoId : null;
+
+    db.run(
+      `
+      INSERT INTO venta_pagos (
+        venta_id,
+        metodo_pago,
+        monto,
+        cliente_fiado_id,
+        observaciones
+      )
+      VALUES (?, ?, ?, ?, ?)
+      `,
+      [
+        ventaId,
+        item.metodo,
+        item.monto,
+        clienteFiadoId,
+        pago.observaciones,
+      ],
+      (errorPago) => {
+        if (errorPago) {
+          callback("Error al registrar desglose de pago mixto");
+          return;
+        }
+
+        if (item.metodo === "fiado") {
+          db.run(
+            `
+            INSERT INTO fiados (
+              cliente_id,
+              usuario_id,
+              tienda_id,
+              concepto,
+              monto
+            )
+            VALUES (?, ?, ?, ?, ?)
+            `,
+            [
+              pago.clienteFiadoId,
+              usuario_id,
+              tienda_id,
+              `Venta mixta ${folio} - ${conceptoFiado}`,
+              item.monto,
+            ],
+            (errorFiado) => {
+              if (errorFiado) {
+                callback("Error al registrar fiado de pago mixto");
+                return;
+              }
+
+              guardarPago(index + 1);
+            }
+          );
+
+          return;
+        }
+
+        if (item.metodo === "efectivo") {
+          db.run(
+            `
+            INSERT INTO movimientos_caja (
+              tienda_id,
+              usuario_id,
+              tipo_movimiento,
+              monto,
+              concepto,
+              observaciones
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            `,
+            [
+              tienda_id,
+              usuario_id,
+              "entrada_dinero",
+              item.monto,
+              "Venta mixta efectivo",
+              `Venta ${folio}`,
+            ],
+            (errorCaja) => {
+              if (errorCaja) {
+                callback("Error al registrar efectivo de pago mixto");
+                return;
+              }
+
+              guardarPago(index + 1);
+            }
+          );
+
+          return;
+        }
+
+        guardarPago(index + 1);
+      }
+    );
+  };
+
+  if (redondearCentavos(subtotalVenta) <= 0) {
+    callback("Total invalido para pago mixto");
+    return;
+  }
+
+  guardarPago(0);
 };
 
 const rollback = (res, mensaje) => {
@@ -883,9 +1222,17 @@ const obtenerVentaPorId = (req, res) => {
         });
       }
 
-      res.json({
-        ...venta,
-        detalles,
+      obtenerServiciosVenta(id, (errorServicios, servicios) => {
+        if (errorServicios) {
+          return res.status(500).json({
+            error: "Error al obtener servicios de venta",
+          });
+        }
+
+        res.json({
+          ...venta,
+          detalles: detalles.concat(servicios),
+        });
       });
     });
   });
@@ -973,12 +1320,52 @@ const queryDetalles = `
         });
       }
 
-      res.json({
-        venta,
-        detalles,
+      obtenerServiciosVenta(id, (errorServicios, servicios) => {
+        if (errorServicios) {
+          return res.status(500).json({
+            error: "Error al obtener servicios",
+          });
+        }
+
+        res.json({
+          venta,
+          detalles: detalles.concat(servicios),
+        });
       });
     });
   });
+};
+
+const obtenerServiciosVenta = (ventaId, callback) => {
+  db.all(
+    `
+    SELECT
+      id,
+      venta_id,
+      NULL AS producto_id,
+      1 AS cantidad,
+      'servicio' AS unidad,
+      total_cobrado AS precio_unitario,
+      total_cobrado AS subtotal,
+      descripcion AS nombre_producto,
+      descripcion AS producto_nombre,
+      tipo AS tipo_producto,
+      NULL AS promocion_id,
+      total_cobrado AS precio_unitario_original,
+      total_cobrado AS precio_unitario_final,
+      0 AS cantidad_promocion_aplicada,
+      0 AS descuento_promocion,
+      0 AS promocion_cantidad_requerida,
+      0 AS promocion_precio,
+      0 AS cantidad_devuelta,
+      0 AS cantidad_restante_devolucion
+    FROM venta_servicios
+    WHERE venta_id = ?
+    ORDER BY id ASC
+    `,
+    [ventaId],
+    callback
+  );
 };
 
 module.exports = {

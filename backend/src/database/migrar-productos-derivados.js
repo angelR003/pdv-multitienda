@@ -16,14 +16,15 @@ const columnas = [
 ];
 
 function agregarColumna(columna) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     db.run(columna.sql, (error) => {
       if (error && !error.message.includes("duplicate column")) {
-        reject(error);
+        console.error(`Error agregando ${columna.nombre}:`, error.message);
+        resolve();
         return;
       }
 
-      if (error && error.message.includes("duplicate column")) {
+      if (error) {
         console.log(`Columna ya existe: ${columna.nombre}`);
       } else {
         console.log(`Columna agregada: ${columna.nombre}`);
@@ -35,17 +36,11 @@ function agregarColumna(columna) {
 }
 
 async function migrar() {
-  try {
-    for (const columna of columnas) {
-      await agregarColumna(columna);
-    }
-
-    console.log("Migración productos derivados lista.");
-    process.exit(0);
-  } catch (error) {
-    console.error("Error migrando productos derivados:", error.message);
-    process.exit(1);
+  for (const columna of columnas) {
+    await agregarColumna(columna);
   }
+
+  console.log("Migracion productos derivados lista.");
 }
 
 migrar();

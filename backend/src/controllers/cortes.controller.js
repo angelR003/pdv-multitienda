@@ -34,11 +34,25 @@ const crearCorteCaja = (req, res) => {
       : "2000-01-01 00:00:00";
 
     const queryVentasEfectivo = `
-      SELECT COALESCE(SUM(total), 0) AS total_efectivo_bruto
-      FROM ventas
-      WHERE tienda_id = ?
-      AND metodo_pago = 'efectivo'
-      AND fecha_venta > ?
+      SELECT COALESCE(SUM(monto), 0) AS total_efectivo_bruto
+      FROM (
+        SELECT total AS monto
+        FROM ventas
+        WHERE tienda_id = ?
+        AND metodo_pago = 'efectivo'
+        AND fecha_venta > ?
+
+        UNION ALL
+
+        SELECT vp.monto
+        FROM venta_pagos vp
+        INNER JOIN ventas v
+          ON v.id = vp.venta_id
+        WHERE v.tienda_id = ?
+        AND v.metodo_pago = 'mixto'
+        AND vp.metodo_pago = 'efectivo'
+        AND v.fecha_venta > ?
+      )
     `;
 
     const queryDevolucionesEfectivo = `
@@ -63,11 +77,12 @@ const crearCorteCaja = (req, res) => {
       FROM movimientos_caja
       WHERE tienda_id = ?
       AND fecha_movimiento > ?
+      AND COALESCE(concepto, '') != 'Venta mixta efectivo'
     `;
 
     db.get(
       queryVentasEfectivo,
-      [tienda_id, fechaUltimoCorte],
+      [tienda_id, fechaUltimoCorte, tienda_id, fechaUltimoCorte],
       (errorVentas, ventasData) => {
         if (errorVentas) {
           return res.status(500).json({

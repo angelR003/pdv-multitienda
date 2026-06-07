@@ -41,15 +41,19 @@
     <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-<div>
+<div class="relative">
   <label class="block text-sm text-zinc-400 mb-2">
     Producto
   </label>
 
   <input id="buscarProductoEntrada" type="text" placeholder="Buscar producto..."
-    class="w-full mb-2 rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-white placeholder-zinc-500" />
+    class="w-full rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-white placeholder-zinc-500 outline-none focus:border-white" />
+  <div
+    id="resultadosProductoEntrada"
+    class="hidden absolute z-40 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-950 shadow-2xl"
+  ></div>
 
-  <select id="producto" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"></select>
+  <select id="producto" class="hidden"></select>
         </div>
 
         <div>

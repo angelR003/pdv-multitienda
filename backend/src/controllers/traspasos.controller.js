@@ -54,14 +54,16 @@ const obtenerProductosParaTraspaso = (req, res) => {
       p.id,
       p.nombre,
       p.codigo_barras,
+      p.marca,
+      p.categoria,
       p.tipo_producto,
       p.unidad,
       p.es_derivado,
       p.producto_padre_id,
       p.factor_conversion,
-      i.cantidad_actual
+      COALESCE(i.cantidad_actual, 0) AS cantidad_actual
     FROM productos p
-    INNER JOIN inventario i
+    LEFT JOIN inventario i
       ON i.producto_id = p.id
       AND i.tienda_id = ?
     WHERE p.activo = 1

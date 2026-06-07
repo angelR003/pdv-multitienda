@@ -10,6 +10,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     autoHideMenuBar: true,
+    icon: path.join(__dirname, "assets", "app-icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -76,15 +77,28 @@ ipcMain.handle("check-update", async () => {
   if (!app.isPackaged) {
     return {
       ok: false,
+      estado: "error",
       mensaje: "Las actualizaciones solo funcionan en el exe instalado."
     };
   }
 
   try {
+    updateDisponible = false;
     const resultado = await autoUpdater.checkForUpdates();
-    return { ok: true, resultado };
+    const info = resultado?.updateInfo || null;
+
+    return {
+      ok: true,
+      estado: updateDisponible ? "disponible" : "actualizado",
+      version: updateDisponible ? info?.version : null,
+    };
   } catch (error) {
-    return { ok: false, mensaje: error.message };
+    updateDisponible = false;
+    return {
+      ok: false,
+      estado: "error",
+      mensaje: error.message,
+    };
   }
 });
 
@@ -116,6 +130,7 @@ ipcMain.handle("install-update", () => {
 });
 
 app.whenReady().then(() => {
+  app.setAppUserModelId("com.lasgardenias.pdv");
   iniciarBackend();
   configurarActualizador();
 

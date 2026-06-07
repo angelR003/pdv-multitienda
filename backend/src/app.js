@@ -7,11 +7,18 @@ const { crearBackup } = require("./utils/backup");
 require("dotenv").config();
 require("./database/connection");
 require("./database/run-migrations");
+require("./database/migrar-fiados");
+require("./database/migrar-accesos");
+require("./database/migrar-productos-derivados");
 require("./database/migrar-importes-cliente-fiado");
 require("./database/migrar-promociones");
 require("./database/migrar-venta-detalles-promociones");
 require("./database/migrar-productos-retornables");
 require("./database/migrar-traspasos");
+require("./database/migrar-ajustes-envases");
+require("./database/migrar-tipos-envase-cajas");
+require("./database/migrar-venta-pagos");
+require("./database/migrar-venta-servicios");
 
 const productosRoutes = require("./routes/productos.routes");
 const ventasRoutes = require("./routes/ventas.routes");

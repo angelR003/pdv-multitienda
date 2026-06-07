@@ -14,6 +14,8 @@ if (!tiendaId) {
 }
 
 const producto = document.getElementById("producto");
+const buscarProductoEntrada = document.getElementById("buscarProductoEntrada");
+const resultadosProductoEntrada = document.getElementById("resultadosProductoEntrada");
 const cantidad = document.getElementById("cantidad");
 const grupoPiezasSueltas = document.getElementById("grupoPiezasSueltas");
 const piezasSueltas = document.getElementById("piezasSueltas");
@@ -197,6 +199,9 @@ function renderSelectProductos(lista) {
   });
 
   actualizarCampoCantidad();
+  if (productos.length > 0 && !buscarProductoEntrada.value) {
+    seleccionarProductoEntrada(productos[0], false);
+  }
 }
 
 function obtenerUnidadesPorPaquete(item) {
@@ -209,17 +214,87 @@ function obtenerUnidadesPorPaquete(item) {
   return Math.round(1 / factor);
 }
 
-const buscarProductoEntrada = document.getElementById("buscarProductoEntrada");
-
 buscarProductoEntrada?.addEventListener("input", () => {
-  const texto = buscarProductoEntrada.value.toLowerCase().trim();
+  renderResultadosProductoEntrada();
+});
+
+buscarProductoEntrada?.addEventListener("focus", () => {
+  renderResultadosProductoEntrada();
+});
+
+document.addEventListener("click", (event) => {
+  if (
+    !buscarProductoEntrada?.contains(event.target) &&
+    !resultadosProductoEntrada?.contains(event.target)
+  ) {
+    resultadosProductoEntrada?.classList.add("hidden");
+  }
+});
+
+function renderResultadosProductoEntrada() {
+  if (!resultadosProductoEntrada) return;
+
+  const texto = normalizarTexto(buscarProductoEntrada.value);
 
   const filtrados = productos.filter((p) =>
-    String(p.nombre || "").toLowerCase().includes(texto) ||
-    String(p.codigo_barras || "").toLowerCase().includes(texto) ||
-    String(p.categoria || "").toLowerCase().includes(texto) ||
-    String(p.marca || "").toLowerCase().includes(texto)
-  );
+    productoCoincideBusqueda(p, texto)
+  ).slice(0, 10);
 
-  renderSelectProductos(filtrados);
-});
+  resultadosProductoEntrada.innerHTML = "";
+
+  if (filtrados.length === 0) {
+    resultadosProductoEntrada.innerHTML = `
+      <div class="p-4 text-sm text-zinc-500">No hay productos activos.</div>
+    `;
+    resultadosProductoEntrada.classList.remove("hidden");
+    return;
+  }
+
+  filtrados.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "w-full text-left px-4 py-3 hover:bg-zinc-900 border-b border-zinc-800 last:border-b-0";
+    button.innerHTML = `
+      <div class="font-black">${item.nombre}</div>
+      <div class="text-xs text-zinc-500">
+        ${item.codigo_barras || "Sin codigo"}${item.marca ? ` - ${item.marca}` : ""}${item.categoria ? ` - ${item.categoria}` : ""}${item.presentacion ? ` - ${item.presentacion}` : ""}
+      </div>
+    `;
+    button.addEventListener("click", () => seleccionarProductoEntrada(item));
+    resultadosProductoEntrada.appendChild(button);
+  });
+
+  resultadosProductoEntrada.classList.remove("hidden");
+}
+
+function seleccionarProductoEntrada(item, enfocarCantidad = true) {
+  producto.value = item.id;
+  buscarProductoEntrada.value = `${item.nombre} - ${item.presentacion || item.unidad}`;
+  resultadosProductoEntrada?.classList.add("hidden");
+  actualizarCampoCantidad();
+
+  if (enfocarCantidad) {
+    cantidad.focus();
+  }
+}
+
+function productoCoincideBusqueda(item, texto) {
+  if (!texto) return true;
+
+  return normalizarTexto([
+    item.nombre,
+    item.codigo_barras,
+    item.categoria,
+    item.marca,
+    item.presentacion,
+    item.unidad,
+  ].join(" ")).includes(texto);
+}
+
+function normalizarTexto(texto) {
+  return String(texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
