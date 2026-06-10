@@ -48,15 +48,19 @@
           class="lg:col-span-2 bg-zinc-900 rounded-2xl p-5 border border-zinc-800"
         >
           <label class="block text-sm text-zinc-400 mb-2"
-            >Escanear / escribir código</label
+            >Escanear codigo o buscar producto</label
           >
           <input
             id="codigoInput"
             type="text"
             autofocus
             class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-4 text-2xl outline-none focus:border-green-500"
-            placeholder="Código de barras..."
+            placeholder="Codigo de barras o producto manual..."
           />
+          <div
+            id="resultadosBusquedaManual"
+            class="hidden mt-2 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
+          ></div>
 
           <div class="mt-6 overflow-hidden rounded-xl border border-zinc-800">
             <table class="w-full text-left">
@@ -182,13 +186,13 @@
           >
             Agregar producto por peso
           </button>
-<button
-  type="button"
-  id="btnProductoSuelto"
-  class="w-full mt-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3"
->
-  Agregar producto suelto
-</button>
+          <button
+            type="button"
+            id="btnProductoSuelto"
+            class="w-full mt-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3"
+          >
+            Agregar producto suelto
+          </button>
 
           <button
             type="button"
@@ -503,6 +507,7 @@
       </div>
     </div>
 
+    <script src="./js/session.js?v=20260607"></script>
     <script src="./js/redondeo-operativo.js?v=20260605"></script>
     <script src="./js/importes-envases.js?v=20260606"></script>
     <script src="./js/venta.js?v=20260608"></script>

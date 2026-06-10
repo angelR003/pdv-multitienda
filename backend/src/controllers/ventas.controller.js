@@ -5,11 +5,11 @@ const {
 } = require("../../../frontend/js/redondeo-operativo");
 const { calcularImporteEnvase } = require("../utils/importes-envases");
 
-const calcularPromocionProducto = (cantidad, precioNormal, promocion) => {
+const calcularPromocionProducto = (cantidad, precioNormal, promociones = []) => {
   const cantidadNumero = Number(cantidad);
   const precioNormalNumero = Number(precioNormal);
 
-  if (!promocion) {
+  const respuestaNormal = () => {
     const subtotalNormal = cantidadNumero * precioNormalNumero;
 
     return {
@@ -20,48 +20,98 @@ const calcularPromocionProducto = (cantidad, precioNormal, promocion) => {
       cantidadPromocionAplicada: 0,
       descuentoPromocion: 0,
     };
-  }
-
-  const cantidadRequerida = Number(promocion.cantidad_requerida);
-  const precioPromocion = Number(promocion.precio_promocion);
+  };
 
   if (
     !Number.isInteger(cantidadNumero) ||
-    cantidadNumero < cantidadRequerida ||
-    cantidadRequerida < 2 ||
-    precioPromocion <= 0
+    cantidadNumero <= 0 ||
+    !Array.isArray(promociones) ||
+    promociones.length === 0
   ) {
-    const subtotalNormal = cantidadNumero * precioNormalNumero;
-
-    return {
-      subtotal: subtotalNormal,
-      precioUnitarioFinal: precioNormalNumero,
-      precioUnitarioOriginal: precioNormalNumero,
-      promocionId: null,
-      cantidadPromocionAplicada: 0,
-      descuentoPromocion: 0,
-    };
+    return respuestaNormal();
   }
 
-  const gruposPromo = Math.floor(cantidadNumero / cantidadRequerida);
-  const cantidadConPromo = gruposPromo * cantidadRequerida;
-  const cantidadNormal = cantidadNumero - cantidadConPromo;
+  const promocionesValidas = promociones
+    .map((promo) => ({
+      id: promo.id,
+      cantidad: Number(promo.cantidad_requerida),
+      precioCentavos: Math.round(Number(promo.precio_promocion) * 100),
+    }))
+    .filter((promo) =>
+      Number.isInteger(promo.cantidad) &&
+      promo.cantidad >= 2 &&
+      promo.precioCentavos > 0
+    )
+    .sort((a, b) => {
+      const precioUnidadA = a.precioCentavos / a.cantidad;
+      const precioUnidadB = b.precioCentavos / b.cantidad;
 
-  const subtotalPromo = gruposPromo * precioPromocion;
-  const subtotalNormalRestante = cantidadNormal * precioNormalNumero;
+      if (precioUnidadA !== precioUnidadB) {
+        return precioUnidadA - precioUnidadB;
+      }
 
-  const subtotalFinal = subtotalPromo + subtotalNormalRestante;
+      return b.cantidad - a.cantidad;
+    });
+
+  if (promocionesValidas.length === 0) {
+    return respuestaNormal();
+  }
+
+  const precioNormalCentavos = Math.round(precioNormalNumero * 100);
+  const dp = Array.from({ length: cantidadNumero + 1 }, () => ({
+    total: 0,
+    conteoPromos: {},
+    cantidadPromo: 0,
+  }));
+
+  for (let i = 1; i <= cantidadNumero; i += 1) {
+    let mejor = {
+      total: dp[i - 1].total + precioNormalCentavos,
+      conteoPromos: { ...dp[i - 1].conteoPromos },
+      cantidadPromo: dp[i - 1].cantidadPromo,
+    };
+
+    promocionesValidas.forEach((promo) => {
+      if (i < promo.cantidad) return;
+
+      const anterior = dp[i - promo.cantidad];
+      const candidato = {
+        total: anterior.total + promo.precioCentavos,
+        conteoPromos: {
+          ...anterior.conteoPromos,
+          [promo.id]: (anterior.conteoPromos[promo.id] || 0) + 1,
+        },
+        cantidadPromo: anterior.cantidadPromo + promo.cantidad,
+      };
+
+      if (candidato.total < mejor.total) {
+        mejor = candidato;
+      }
+    });
+
+    dp[i] = mejor;
+  }
+
+  const mejorResultado = dp[cantidadNumero];
+  const subtotalFinal = mejorResultado.total / 100;
   const subtotalOriginal = cantidadNumero * precioNormalNumero;
-
   const descuentoPromocion = subtotalOriginal - subtotalFinal;
+
+  if (descuentoPromocion <= 0 || mejorResultado.cantidadPromo <= 0) {
+    return respuestaNormal();
+  }
+
   const precioUnitarioFinal = subtotalFinal / cantidadNumero;
+  const promocionPrincipal = promocionesValidas.find(
+    (promo) => mejorResultado.conteoPromos[promo.id] > 0
+  );
 
   return {
     subtotal: subtotalFinal,
     precioUnitarioFinal,
     precioUnitarioOriginal: precioNormalNumero,
-    promocionId: promocion.id,
-    cantidadPromocionAplicada: cantidadConPromo,
+    promocionId: promocionPrincipal?.id || null,
+    cantidadPromocionAplicada: mejorResultado.cantidadPromo,
     descuentoPromocion,
   };
 };
@@ -580,7 +630,7 @@ AND producto_id = ?
 
 const precioUnitarioNormal = Number(producto.precio_aplicable);
 
-db.get(
+db.all(
   `
   SELECT
     id,
@@ -589,10 +639,10 @@ db.get(
   FROM promociones
   WHERE producto_id = ?
   AND activa = 1
-  LIMIT 1
+  ORDER BY cantidad_requerida DESC
   `,
   [producto.id],
-  (errorPromocion, promocion) => {
+  (errorPromocion, promocionesProducto) => {
     if (errorPromocion) {
       return rollback(res, "Error al consultar promoción");
     }
@@ -607,7 +657,7 @@ db.get(
       resultadoPrecio = calcularPromocionProducto(
         cantidad,
         precioUnitarioNormal,
-        promocion
+        promocionesProducto
       );
     } else {
       resultadoPrecio = calcularPromocionProducto(
@@ -1263,6 +1313,8 @@ const queryDetalles = `
     vd.id,
     vd.venta_id,
     vd.producto_id,
+    NULL AS servicio_id,
+    'producto' AS detalle_tipo,
     vd.cantidad,
     vd.unidad,
     vd.precio_unitario,
@@ -1340,28 +1392,36 @@ const obtenerServiciosVenta = (ventaId, callback) => {
   db.all(
     `
     SELECT
-      id,
-      venta_id,
+      vs.id,
+      vs.venta_id,
       NULL AS producto_id,
+      vs.id AS servicio_id,
+      'servicio' AS detalle_tipo,
       1 AS cantidad,
       'servicio' AS unidad,
-      total_cobrado AS precio_unitario,
-      total_cobrado AS subtotal,
-      descripcion AS nombre_producto,
-      descripcion AS producto_nombre,
-      tipo AS tipo_producto,
+      vs.total_cobrado AS precio_unitario,
+      vs.total_cobrado AS subtotal,
+      vs.descripcion AS nombre_producto,
+      vs.descripcion AS producto_nombre,
+      vs.tipo AS tipo_producto,
       NULL AS promocion_id,
-      total_cobrado AS precio_unitario_original,
-      total_cobrado AS precio_unitario_final,
+      vs.total_cobrado AS precio_unitario_original,
+      vs.total_cobrado AS precio_unitario_final,
       0 AS cantidad_promocion_aplicada,
       0 AS descuento_promocion,
       0 AS promocion_cantidad_requerida,
       0 AS promocion_precio,
-      0 AS cantidad_devuelta,
-      0 AS cantidad_restante_devolucion
-    FROM venta_servicios
-    WHERE venta_id = ?
-    ORDER BY id ASC
+      COALESCE(SUM(dd.cantidad), 0) AS cantidad_devuelta,
+      1 - COALESCE(SUM(dd.cantidad), 0) AS cantidad_restante_devolucion
+    FROM venta_servicios vs
+    LEFT JOIN devoluciones d
+      ON d.venta_id = vs.venta_id
+    LEFT JOIN devolucion_detalles dd
+      ON dd.devolucion_id = d.id
+      AND dd.servicio_id = vs.id
+    WHERE vs.venta_id = ?
+    GROUP BY vs.id
+    ORDER BY vs.id ASC
     `,
     [ventaId],
     callback

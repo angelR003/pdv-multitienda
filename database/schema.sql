@@ -168,7 +168,8 @@ CREATE TABLE IF NOT EXISTS devoluciones (
 CREATE TABLE IF NOT EXISTS devolucion_detalles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   devolucion_id INTEGER NOT NULL,
-  producto_id INTEGER NOT NULL,
+  producto_id INTEGER,
+  servicio_id INTEGER,
   cantidad REAL NOT NULL,
   estado_producto TEXT NOT NULL CHECK (estado_producto IN ('regresa_inventario', 'no_regresa_inventario', 'requiere_revision')),
   monto_devuelto REAL DEFAULT 0,

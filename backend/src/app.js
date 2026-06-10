@@ -13,12 +13,14 @@ require("./database/migrar-productos-derivados");
 require("./database/migrar-importes-cliente-fiado");
 require("./database/migrar-promociones");
 require("./database/migrar-venta-detalles-promociones");
+require("./database/migrar-total-devuelto");
 require("./database/migrar-productos-retornables");
 require("./database/migrar-traspasos");
 require("./database/migrar-ajustes-envases");
 require("./database/migrar-tipos-envase-cajas");
 require("./database/migrar-venta-pagos");
 require("./database/migrar-venta-servicios");
+require("./database/migrar-devoluciones-servicios");
 
 const productosRoutes = require("./routes/productos.routes");
 const ventasRoutes = require("./routes/ventas.routes");

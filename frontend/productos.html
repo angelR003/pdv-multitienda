@@ -43,7 +43,7 @@
 
               <option value="peso_variable">Peso variable</option>
 
-              <option value="manual">Manual</option>
+              <option value="manual">Manual simple / sin codigo</option>
             </select>
           </div>
 
@@ -202,11 +202,11 @@
           <div class="md:col-span-2 mt-4 border border-zinc-800 rounded-2xl p-4">
   <label class="flex items-center gap-3 font-bold">
     <input id="esDerivado" type="checkbox" class="w-4 h-4">
-    Producto suelto / derivado
+    Producto derivado de otro producto
   </label>
 
   <p class="text-zinc-500 text-sm mt-2">
-    Úsalo para cigarros sueltos, pilas sueltas, rollos de papel, cerillos, etc.
+    Marcalo solo si este producto descuenta inventario de un producto padre, como cigarros sueltos desde una cajetilla.
   </p>
 
   <div id="grupoDerivado" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -301,6 +301,7 @@
 </section>
     </main>
 
+    <script src="./js/session.js?v=20260607"></script>
     <script src="./js/productos.js"></script>
   </body>
 </html>

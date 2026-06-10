@@ -29,6 +29,7 @@ if (!token || !usuario) {
 const API_URL = "http://localhost:3000/api";
 
 const codigoInput = document.getElementById("codigoInput");
+const resultadosBusquedaManual = document.getElementById("resultadosBusquedaManual");
 const carritoTabla = document.getElementById("carritoTabla");
 const totalVenta = document.getElementById("totalVenta");
 const totalProductos = document.getElementById("totalProductos");
@@ -90,6 +91,8 @@ const labelCantidadManual = document.getElementById("labelCantidadManual");
 
 let clientesFiado = [];
 let carrito = [];
+let productosManualSimple = [];
+let timeoutBusquedaManual = null;
 let modoModalProducto = "peso";
 let promocionesActivas = [];
 let resolverEnvasesVenta = null;
@@ -111,15 +114,49 @@ btnLogout.addEventListener("click", cerrarSesion);
 
 codigoInput.addEventListener("keydown", async (event) => {
   if (event.key !== "Enter") return;
+  event.preventDefault();
 
-  const codigo = codigoInput.value.trim();
+  const texto = codigoInput.value.trim();
 
-  if (!codigo) return;
+  if (!texto) return;
 
-  await buscarProductoPorCodigo(codigo);
+  const agregadoPorCodigo = await buscarProductoPorCodigo(texto);
+
+  if (!agregadoPorCodigo) {
+    await cargarProductosManualSimple();
+    const coincidencias = filtrarProductosManualSimple(texto);
+
+    if (coincidencias.length === 1) {
+      agregarProductoManualSimpleAlCarrito(coincidencias[0]);
+    } else if (coincidencias.length > 1) {
+      renderResultadosBusquedaManual(coincidencias);
+      mostrarMensaje("Selecciona el producto manual de la lista.");
+      return;
+    } else {
+      mostrarMensaje("Producto no encontrado.");
+      return;
+    }
+  }
 
   codigoInput.value = "";
+  ocultarResultadosBusquedaManual();
   codigoInput.focus();
+});
+
+codigoInput.addEventListener("input", () => {
+  clearTimeout(timeoutBusquedaManual);
+
+  timeoutBusquedaManual = setTimeout(async () => {
+    const texto = codigoInput.value.trim();
+
+    if (texto.length < 2) {
+      ocultarResultadosBusquedaManual();
+      return;
+    }
+
+    await cargarProductosManualSimple();
+    renderResultadosBusquedaManual(filtrarProductosManualSimple(texto));
+  }, 150);
 });
 
 btnCobrar.addEventListener("click", async (event) => {
@@ -132,6 +169,9 @@ btnCobrar.addEventListener("click", async (event) => {
 btnLimpiar.addEventListener("click", (event) => {
   event.preventDefault();
   carrito = [];
+  pagoCon.value = "";
+  calcularCambio();
+  ocultarResultadosBusquedaManual();
   renderCarrito();
   mostrarMensaje("Venta limpiada.");
 });
@@ -233,16 +273,135 @@ async function buscarProductoPorCodigo(codigo) {
     const data = await response.json();
 
     if (!response.ok) {
-      mostrarMensaje(data.error || "Producto no encontrado.");
-      return;
+      return false;
     }
 
     agregarAlCarrito(data);
     mostrarMensaje(`${data.nombre} agregado.`);
+    return true;
   } catch (error) {
     console.error("Error real al buscar producto:", error);
     mostrarMensaje("Error al buscar producto.");
+    return false;
   }
+}
+
+async function cargarProductosManualSimple() {
+  if (productosManualSimple.length > 0) {
+    return productosManualSimple;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/productos`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const productos = await response.json();
+
+    if (!response.ok || !Array.isArray(productos)) {
+      productosManualSimple = [];
+      return productosManualSimple;
+    }
+
+    productosManualSimple = productos.filter((producto) =>
+      producto.tipo_producto === "manual" &&
+      Number(producto.es_derivado || 0) !== 1
+    );
+
+    return productosManualSimple;
+  } catch (error) {
+    productosManualSimple = [];
+    return productosManualSimple;
+  }
+}
+
+function filtrarProductosManualSimple(texto) {
+  const busqueda = normalizarBusqueda(texto);
+
+  if (!busqueda) return [];
+
+  return productosManualSimple
+    .filter((producto) => {
+      const campos = [
+        producto.nombre,
+        producto.codigo_barras,
+        producto.categoria,
+        producto.marca,
+        producto.presentacion,
+      ].map(normalizarBusqueda);
+
+      return campos.some((campo) => campo.includes(busqueda));
+    })
+    .slice(0, 8);
+}
+
+function normalizarBusqueda(valor) {
+  return String(valor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function renderResultadosBusquedaManual(resultados) {
+  if (!resultadosBusquedaManual) return;
+
+  resultadosBusquedaManual.innerHTML = "";
+
+  if (!resultados.length) {
+    ocultarResultadosBusquedaManual();
+    return;
+  }
+
+  resultados.forEach((producto) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "w-full flex items-center justify-between gap-4 px-4 py-3 text-left hover:bg-zinc-900 border-b border-zinc-800 last:border-b-0";
+    button.innerHTML = `
+      <span>
+        <span class="block font-bold text-white">${producto.nombre}</span>
+        <span class="block text-xs text-zinc-500">
+          ${[producto.codigo_barras, producto.marca, producto.categoria, producto.presentacion]
+            .filter(Boolean)
+            .join(" - ") || "Manual sin codigo"}
+        </span>
+      </span>
+      <span class="text-right">
+        <span class="block font-black text-green-400">$${Number(producto.precio_global || 0).toFixed(2)}</span>
+        <span class="block text-xs text-zinc-500">${producto.unidad || "pieza"}</span>
+      </span>
+    `;
+    button.addEventListener("click", () => {
+      agregarProductoManualSimpleAlCarrito(producto);
+      codigoInput.value = "";
+      ocultarResultadosBusquedaManual();
+      codigoInput.focus();
+    });
+    resultadosBusquedaManual.appendChild(button);
+  });
+
+  resultadosBusquedaManual.classList.remove("hidden");
+}
+
+function ocultarResultadosBusquedaManual() {
+  if (!resultadosBusquedaManual) return;
+
+  resultadosBusquedaManual.classList.add("hidden");
+  resultadosBusquedaManual.innerHTML = "";
+}
+
+function agregarProductoManualSimpleAlCarrito(producto) {
+  agregarAlCarrito({
+    ...producto,
+    precio_aplicable: producto.precio_global,
+    tipo_producto: "manual",
+    unidad: producto.unidad || "pieza",
+    es_derivado: 0,
+  });
+
+  mostrarMensaje(`${producto.nombre} agregado.`);
 }
 
 async function cargarProductosManuales(modo = "peso") {
@@ -269,6 +428,11 @@ async function cargarProductosManuales(modo = "peso") {
 
       if (modo === "suelto") {
         return Number(producto.es_derivado) === 1;
+      }
+
+      if (modo === "manual") {
+        return producto.tipo_producto === "manual" &&
+          Number(producto.es_derivado || 0) !== 1;
       }
 
       return false;
@@ -313,8 +477,11 @@ function agregarProductoManual() {
     mostrarMensaje("Cantidad inválida.");
     return;
   }
-  if (modoModalProducto === "suelto" && !Number.isInteger(cantidad)) {
-  mostrarMensaje("La cantidad de producto suelto debe ser entera.");
+  if (
+    ["suelto", "manual"].includes(modoModalProducto) &&
+    !Number.isInteger(cantidad)
+  ) {
+  mostrarMensaje("La cantidad debe ser una pieza completa.");
   return;
 }
 
@@ -696,6 +863,8 @@ async function cobrarVenta() {
     mostrarMensaje(`Venta registrada. Total: $${data.total.toFixed(2)}`);
 
     carrito = [];
+    pagoCon.value = "";
+    calcularCambio();
     renderCarrito();
     codigoInput.focus();
   } catch (error) {
@@ -1010,14 +1179,14 @@ async function cargarPromocionesActivas() {
 }
 
 
-function obtenerPromocionProducto(productoId) {
-  return promocionesActivas.find(
+function obtenerPromocionesProducto(productoId) {
+  return promocionesActivas.filter(
     (promo) => Number(promo.producto_id) === Number(productoId)
   );
 }
 
 function calcularPrecioConPromocion(item) {
-  const promocion = obtenerPromocionProducto(item.producto_id);
+  const promociones = obtenerPromocionesProducto(item.producto_id);
 
   const cantidad = Number(item.cantidad || 0);
   const precioNormal = Number(item.precio_unitario_original || item.precio_unitario || 0);
@@ -1033,7 +1202,7 @@ function calcularPrecioConPromocion(item) {
     };
   }
 
-  if (!promocion) {
+  if (!promociones || promociones.length === 0) {
     return {
       subtotal: cantidad * precioNormal,
       precioUnitarioFinal: precioNormal,
@@ -1044,14 +1213,33 @@ function calcularPrecioConPromocion(item) {
     };
   }
 
-  const cantidadRequerida = Number(promocion.cantidad_requerida);
-  const precioPromocion = Number(promocion.precio_promocion);
+  const promocionesValidas = promociones
+    .map((promo) => ({
+      id: promo.id,
+      cantidad: Number(promo.cantidad_requerida),
+      precioCentavos: Math.round(Number(promo.precio_promocion) * 100),
+      precioPromocion: Number(promo.precio_promocion),
+    }))
+    .filter((promo) =>
+      Number.isInteger(promo.cantidad) &&
+      promo.cantidad >= 2 &&
+      promo.precioCentavos > 0
+    )
+    .sort((a, b) => {
+      const precioUnidadA = a.precioCentavos / a.cantidad;
+      const precioUnidadB = b.precioCentavos / b.cantidad;
+
+      if (precioUnidadA !== precioUnidadB) {
+        return precioUnidadA - precioUnidadB;
+      }
+
+      return b.cantidad - a.cantidad;
+    });
 
   if (
     !Number.isInteger(cantidad) ||
-    cantidad < cantidadRequerida ||
-    cantidadRequerida < 2 ||
-    precioPromocion <= 0
+    cantidad <= 0 ||
+    promocionesValidas.length === 0
   ) {
     return {
       subtotal: cantidad * precioNormal,
@@ -1063,24 +1251,73 @@ function calcularPrecioConPromocion(item) {
     };
   }
 
-  const gruposPromo = Math.floor(cantidad / cantidadRequerida);
-  const cantidadConPromo = gruposPromo * cantidadRequerida;
-  const cantidadNormal = cantidad - cantidadConPromo;
+  const precioNormalCentavos = Math.round(precioNormal * 100);
+  const dp = Array.from({ length: cantidad + 1 }, () => ({
+    total: 0,
+    conteoPromos: {},
+    cantidadPromo: 0,
+  }));
 
-  const subtotalPromo = gruposPromo * precioPromocion;
-  const subtotalNormal = cantidadNormal * precioNormal;
+  for (let i = 1; i <= cantidad; i += 1) {
+    let mejor = {
+      total: dp[i - 1].total + precioNormalCentavos,
+      conteoPromos: { ...dp[i - 1].conteoPromos },
+      cantidadPromo: dp[i - 1].cantidadPromo,
+    };
 
-  const subtotalFinal = subtotalPromo + subtotalNormal;
+    promocionesValidas.forEach((promo) => {
+      if (i < promo.cantidad) return;
+
+      const anterior = dp[i - promo.cantidad];
+      const candidato = {
+        total: anterior.total + promo.precioCentavos,
+        conteoPromos: {
+          ...anterior.conteoPromos,
+          [promo.id]: (anterior.conteoPromos[promo.id] || 0) + 1,
+        },
+        cantidadPromo: anterior.cantidadPromo + promo.cantidad,
+      };
+
+      if (candidato.total < mejor.total) {
+        mejor = candidato;
+      }
+    });
+
+    dp[i] = mejor;
+  }
+
+  const mejorResultado = dp[cantidad];
+  const subtotalFinal = mejorResultado.total / 100;
   const subtotalOriginal = cantidad * precioNormal;
   const descuentoPromocion = subtotalOriginal - subtotalFinal;
+
+  if (descuentoPromocion <= 0 || mejorResultado.cantidadPromo <= 0) {
+    return {
+      subtotal: cantidad * precioNormal,
+      precioUnitarioFinal: precioNormal,
+      promocionAplicada: false,
+      cantidadPromocionAplicada: 0,
+      descuentoPromocion: 0,
+      textoPromocion: "",
+    };
+  }
+
+  const textoPromocion = promocionesValidas
+    .filter((promo) => mejorResultado.conteoPromos[promo.id] > 0)
+    .map((promo) => {
+      const veces = mejorResultado.conteoPromos[promo.id];
+      const textoBase = `${promo.cantidad} por $${promo.precioPromocion.toFixed(2)}`;
+      return veces > 1 ? `${textoBase} x${veces}` : textoBase;
+    })
+    .join(" + ");
 
   return {
     subtotal: subtotalFinal,
     precioUnitarioFinal: subtotalFinal / cantidad,
     promocionAplicada: true,
-    cantidadPromocionAplicada: cantidadConPromo,
+    cantidadPromocionAplicada: mejorResultado.cantidadPromo,
     descuentoPromocion,
-    textoPromocion: `${cantidadRequerida} por $${precioPromocion.toFixed(2)}`,
+    textoPromocion,
   };
 }
 

@@ -139,6 +139,12 @@ const crearProducto = (req, res) => {
     });
   }
 
+  if (es_derivado && (!producto_padre_id || !factor_conversion || factor_conversion <= 0)) {
+    return res.status(400).json({
+      error: "Selecciona producto padre y unidades por paquete para el producto derivado",
+    });
+  }
+
   const query = `
     INSERT INTO productos (
       tipo_producto,
@@ -250,6 +256,12 @@ const actualizarProducto = (req, res) => {
     if (es_retornable && !tipo_envase_id) {
     return res.status(400).json({
       error: "Selecciona el tipo de envase para el producto retornable",
+    });
+  }
+
+  if (es_derivado && (!producto_padre_id || !factor_conversion || factor_conversion <= 0)) {
+    return res.status(400).json({
+      error: "Selecciona producto padre y unidades por paquete para el producto derivado",
     });
   }
 

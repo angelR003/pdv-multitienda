@@ -66,7 +66,7 @@ const obtenerPromociones = (req, res) => {
     FROM promociones pr
     INNER JOIN productos p
       ON p.id = pr.producto_id
-    ORDER BY pr.activa DESC, pr.fecha_creacion DESC
+    ORDER BY p.nombre ASC, pr.activa DESC, pr.cantidad_requerida ASC, pr.fecha_creacion DESC
   `;
 
   db.all(query, [], (error, promociones) => {
@@ -160,10 +160,11 @@ const crearPromocion = (req, res) => {
         SELECT id
         FROM promociones
         WHERE producto_id = ?
+        AND cantidad_requerida = ?
         AND activa = 1
         LIMIT 1
         `,
-        [producto_id],
+        [producto_id, cantidadRequerida],
         (errorPromoActiva, promoActiva) => {
           if (errorPromoActiva) {
             return res.status(500).json({
@@ -174,7 +175,7 @@ const crearPromocion = (req, res) => {
 
           if (promoActiva) {
             return res.status(400).json({
-              error: "Este producto ya tiene una promoción activa",
+              error: "Este producto ya tiene una promoción activa con esa cantidad",
             });
           }
 
@@ -272,6 +273,7 @@ const obtenerPromocionesActivasVenta = (req, res) => {
     AND p.activo = 1
     AND p.tipo_producto != 'peso_variable'
     AND p.es_derivado = 0
+    ORDER BY pr.producto_id ASC, pr.cantidad_requerida DESC
   `;
 
   db.all(query, [], (error, promociones) => {

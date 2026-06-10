@@ -2,6 +2,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("../database/connection");
 
+const JWT_SECRET = process.env.JWT_SECRET || "las_gardenias_secret_local";
+const TOKEN_EXPIRA_EN = "8h";
 
 const login = (req, res) => {
   const { username, password, tienda_id } = req.body;
@@ -56,9 +58,9 @@ const login = (req, res) => {
         rol: usuario.rol,
         tienda_id: usuario.tienda_id,
       },
-      process.env.JWT_SECRET || "las_gardenias_secret_local",
+      JWT_SECRET,
       {
-        expiresIn: "8h",
+        expiresIn: TOKEN_EXPIRA_EN,
       }
     );
 
@@ -88,6 +90,35 @@ const login = (req, res) => {
   });
 };
 
+const renovarSesion = (req, res) => {
+  const usuario = req.usuario;
+
+  if (!usuario) {
+    return res.status(401).json({
+      error: "Sesion invalida",
+    });
+  }
+
+  const token = jwt.sign(
+    {
+      id: usuario.id,
+      nombre: usuario.nombre,
+      rol: usuario.rol,
+      tienda_id: usuario.tienda_id,
+    },
+    JWT_SECRET,
+    {
+      expiresIn: TOKEN_EXPIRA_EN,
+    }
+  );
+
+  res.json({
+    mensaje: "Sesion renovada correctamente",
+    token,
+  });
+};
+
 module.exports = {
   login,
+  renovarSesion,
 };

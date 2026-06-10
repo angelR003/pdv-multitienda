@@ -1,5 +1,53 @@
 const db = require("../database/connection");
 
+const asegurarColumnaServicioDevolucion = (callback) => {
+  db.all("PRAGMA table_info(devolucion_detalles)", [], (error, columnas) => {
+    if (error) {
+      callback(error);
+      return;
+    }
+
+    const existe = columnas.some((columna) => columna.name === "servicio_id");
+
+    if (existe) {
+      callback();
+      return;
+    }
+
+    db.run(
+      "ALTER TABLE devolucion_detalles ADD COLUMN servicio_id INTEGER",
+      (errorAlter) => {
+        if (errorAlter && !errorAlter.message.includes("duplicate column")) {
+          callback(errorAlter);
+          return;
+        }
+
+        callback();
+      }
+    );
+  });
+};
+
+const obtenerProductoReferenciaDevolucion = (callback) => {
+  db.get(
+    `
+    SELECT id
+    FROM productos
+    ORDER BY id ASC
+    LIMIT 1
+    `,
+    [],
+    (error, producto) => {
+      if (error) {
+        callback(error);
+        return;
+      }
+
+      callback(null, producto?.id || null);
+    }
+  );
+};
+
 const cancelarEnvasesPendientesPorDevolucion = (
   { venta, tiendaId, usuarioId, detalles },
   callback
@@ -319,6 +367,10 @@ const actualizarEstadoVentaPorDevolucion = (ventaId, callback) => {
         SELECT COALESCE(SUM(cantidad), 0)
         FROM venta_detalles
         WHERE venta_id = ?
+      ) + (
+        SELECT COALESCE(COUNT(*), 0)
+        FROM venta_servicios
+        WHERE venta_id = ?
       ) AS total_vendido,
 
       (
@@ -330,7 +382,7 @@ const actualizarEstadoVentaPorDevolucion = (ventaId, callback) => {
       ) AS total_devuelto
   `;
 
-  db.get(query, [ventaId, ventaId], (error, row) => {
+  db.get(query, [ventaId, ventaId, ventaId], (error, row) => {
     if (error) {
       return callback(error);
     }
@@ -371,6 +423,8 @@ const registrarDevolucionRenglon = (req, res) => {
     venta_id,
     venta_detalle_id,
     producto_id,
+    servicio_id,
+    detalle_tipo,
     tienda_id,
     usuario_id,
     cantidad,
@@ -381,7 +435,6 @@ const registrarDevolucionRenglon = (req, res) => {
   if (
     !venta_id ||
     !venta_detalle_id ||
-    !producto_id ||
     !tienda_id ||
     !usuario_id ||
     !cantidad ||
@@ -395,6 +448,25 @@ const registrarDevolucionRenglon = (req, res) => {
 
   const cantidadDevuelta = Number(cantidad);
   const totalDevuelto = cantidadDevuelta * Number(precio_unitario);
+
+  if (detalle_tipo === "servicio") {
+    return registrarDevolucionServicio({
+      venta_id,
+      servicio_id: servicio_id || venta_detalle_id,
+      tienda_id,
+      usuario_id,
+      cantidadDevuelta,
+      totalDevuelto,
+      motivo,
+      res,
+    });
+  }
+
+  if (!producto_id) {
+    return res.status(400).json({
+      error: "Producto requerido para devolver producto",
+    });
+  }
 
   db.get(
     `
@@ -604,6 +676,190 @@ actualizarEstadoVentaPorDevolucion(
   );
 };
 
+const registrarDevolucionServicio = ({
+  venta_id,
+  servicio_id,
+  tienda_id,
+  usuario_id,
+  cantidadDevuelta,
+  totalDevuelto,
+  motivo,
+  res,
+}) => {
+  if (cantidadDevuelta !== 1) {
+    return res.status(400).json({
+      error: "Los servicios y recargas se devuelven completos.",
+    });
+  }
+
+  db.get(
+    `
+    SELECT *
+    FROM venta_servicios
+    WHERE id = ?
+    AND venta_id = ?
+    `,
+    [servicio_id, venta_id],
+    (errorServicio, servicio) => {
+      if (errorServicio) {
+        return res.status(500).json({
+          error: "Error al obtener servicio",
+          detalle: errorServicio.message,
+        });
+      }
+
+      if (!servicio) {
+        return res.status(404).json({
+          error: "Servicio de venta no encontrado",
+        });
+      }
+
+      db.get(
+        `
+        SELECT COALESCE(SUM(dd.cantidad), 0) AS cantidad_devuelta
+        FROM devolucion_detalles dd
+        INNER JOIN devoluciones d ON d.id = dd.devolucion_id
+        WHERE d.venta_id = ?
+        AND dd.servicio_id = ?
+        `,
+        [venta_id, servicio_id],
+        (errorDevueltas, rowDevueltas) => {
+          if (errorDevueltas) {
+            return res.status(500).json({
+              error: "Error al revisar devoluciones previas",
+              detalle: errorDevueltas.message,
+            });
+          }
+
+          const cantidadYaDevuelta = Number(rowDevueltas.cantidad_devuelta || 0);
+
+          if (cantidadYaDevuelta >= 1) {
+            return res.status(400).json({
+              error: "Este servicio ya fue devuelto completamente.",
+            });
+          }
+
+          db.serialize(() => {
+            db.run("BEGIN TRANSACTION");
+
+            db.run(
+              `
+              INSERT INTO devoluciones (
+                venta_id,
+                tienda_id,
+                usuario_id,
+                motivo,
+                total_devuelto
+              )
+              VALUES (?, ?, ?, ?, ?)
+              `,
+              [
+                venta_id,
+                tienda_id,
+                usuario_id,
+                motivo,
+                totalDevuelto,
+              ],
+              function (errorDevolucion) {
+                if (errorDevolucion) {
+                  db.run("ROLLBACK");
+                  return res.status(500).json({
+                    error: "Error al registrar devolucion",
+                    detalle: errorDevolucion.message,
+                  });
+                }
+
+                const devolucionId = this.lastID;
+
+                asegurarColumnaServicioDevolucion((errorColumna) => {
+                  if (errorColumna) {
+                    db.run("ROLLBACK");
+                    return res.status(500).json({
+                      error: "Error preparando devolucion de servicio",
+                      detalle: errorColumna.message,
+                    });
+                  }
+
+                  obtenerProductoReferenciaDevolucion((errorProductoRef, productoReferenciaId) => {
+                    if (errorProductoRef) {
+                      db.run("ROLLBACK");
+                      return res.status(500).json({
+                        error: "Error preparando producto de referencia",
+                        detalle: errorProductoRef.message,
+                      });
+                    }
+
+                    db.run(
+                      `
+                      INSERT INTO devolucion_detalles (
+                        devolucion_id,
+                        producto_id,
+                        servicio_id,
+                        cantidad,
+                        estado_producto,
+                        monto_devuelto
+                      )
+                      VALUES (?, ?, ?, ?, ?, ?)
+                      `,
+                      [
+                        devolucionId,
+                        productoReferenciaId,
+                        servicio_id,
+                        1,
+                        "no_regresa_inventario",
+                        totalDevuelto,
+                      ],
+                      (errorDetalleDev) => {
+                        if (errorDetalleDev) {
+                          db.run("ROLLBACK");
+                          return res.status(500).json({
+                            error: "Error al registrar detalle de devolucion",
+                            detalle: errorDetalleDev.message,
+                          });
+                        }
+
+                        actualizarEstadoVentaPorDevolucion(
+                          venta_id,
+                          (errorEstadoVenta, nuevoEstadoVenta) => {
+                            if (errorEstadoVenta) {
+                              db.run("ROLLBACK");
+                              return res.status(500).json({
+                                error: "Error al actualizar estado de la venta",
+                                detalle: errorEstadoVenta.message,
+                              });
+                            }
+
+                            db.run("COMMIT", (errorCommit) => {
+                              if (errorCommit) {
+                                db.run("ROLLBACK");
+                                return res.status(500).json({
+                                  error: "Error al confirmar devolucion",
+                                  detalle: errorCommit.message,
+                                });
+                              }
+
+                              return res.status(201).json({
+                                mensaje: "Servicio devuelto correctamente",
+                                devolucion_id: devolucionId,
+                                total_devuelto: totalDevuelto,
+                                estado_venta: nuevoEstadoVenta,
+                              });
+                            });
+                          }
+                        );
+                      }
+                    );
+                  });
+                });
+              }
+            );
+          });
+        }
+      );
+    }
+  );
+};
+
 const obtenerHistorialDevolucionesVenta = (req, res) => {
   const { venta_id } = req.params;
 
@@ -622,11 +878,19 @@ const obtenerHistorialDevolucionesVenta = (req, res) => {
       d.fecha_devolucion,
 
       dd.producto_id,
+      dd.servicio_id,
       dd.cantidad,
       dd.estado_producto,
       dd.monto_devuelto,
 
-      p.nombre AS producto_nombre,
+      CASE
+        WHEN dd.servicio_id IS NOT NULL THEN vs.descripcion
+        ELSE p.nombre
+      END AS producto_nombre,
+      CASE
+        WHEN dd.servicio_id IS NOT NULL THEN 'servicio'
+        ELSE p.unidad
+      END AS unidad,
 
       u.nombre AS usuario_nombre
 
@@ -635,8 +899,11 @@ const obtenerHistorialDevolucionesVenta = (req, res) => {
     INNER JOIN devolucion_detalles dd
       ON dd.devolucion_id = d.id
 
-    INNER JOIN productos p
+    LEFT JOIN productos p
       ON p.id = dd.producto_id
+
+    LEFT JOIN venta_servicios vs
+      ON vs.id = dd.servicio_id
 
     LEFT JOIN usuarios u
       ON u.id = d.usuario_id

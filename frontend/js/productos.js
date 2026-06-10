@@ -182,6 +182,10 @@ function limpiarFormulario() {
   precio.value = "";
   costoCompra.value = "";
   requiereCaducidad.checked = false;
+  esDerivado.checked = false;
+  productoPadre.value = "";
+  unidadesPorPadre.value = "";
+  grupoDerivado.classList.add("hidden");
   esRetornable.checked = false;
   tipoEnvaseRetornable.value = "";
   grupoRetornable.classList.add("hidden");
@@ -305,6 +309,21 @@ async function editarProducto(id) {
     precio.value = producto.precio_global;
     costoCompra.value = producto.costo_compra;
     requiereCaducidad.checked = producto.requiere_caducidad === 1;
+
+    esDerivado.checked = Number(producto.es_derivado || 0) === 1;
+
+    if (esDerivado.checked) {
+      grupoDerivado.classList.remove("hidden");
+      await cargarProductosPadre();
+      productoPadre.value = producto.producto_padre_id || "";
+      unidadesPorPadre.value = producto.factor_conversion
+        ? String(Math.round(1 / Number(producto.factor_conversion)))
+        : "";
+    } else {
+      grupoDerivado.classList.add("hidden");
+      productoPadre.value = "";
+      unidadesPorPadre.value = "";
+    }
 
     esRetornable.checked = Number(producto.es_retornable || 0) === 1;
     tipoEnvaseRetornable.value = producto.tipo_envase_id || "";

@@ -112,6 +112,8 @@ function renderDetalles(detalles) {
     const cantidadVendida = Number(detalle.cantidad || 0);
     const cantidadDevuelta = Number(detalle.cantidad_devuelta || 0);
     const cantidadRestante = Number(detalle.cantidad_restante_devolucion || 0);
+    const detalleTipo = detalle.detalle_tipo || "producto";
+    const inputDevolucionId = `devolver-${detalleTipo}-${detalle.id}`;
 
 
     const tienePromocion = Number(detalle.promocion_id || 0) > 0;
@@ -190,7 +192,7 @@ tr.innerHTML = `
         : `
           <div class="flex items-center gap-2">
             <input
-              id="devolver-${detalle.id}"
+              id="${inputDevolucionId}"
               type="number"
               min="1"
               max="${cantidadRestante}"
@@ -201,9 +203,10 @@ tr.innerHTML = `
             <button
               onclick="devolverRenglon(
                 ${detalle.id},
-                ${detalle.producto_id},
+                ${detalle.producto_id || "null"},
                 ${cantidadRestante},
-                ${precioFinal}
+                ${precioFinal},
+                '${detalleTipo}'
               )"
               class="bg-red-500 hover:bg-red-400 text-black px-4 py-2 rounded-xl font-bold"
             >
@@ -326,9 +329,10 @@ async function devolverRenglon(
   detalleId,
   productoId,
   cantidadMaxima,
-  precioUnitario
+  precioUnitario,
+  detalleTipo = "producto"
 ) {
-  const input = document.getElementById(`devolver-${detalleId}`);
+  const input = document.getElementById(`devolver-${detalleTipo}-${detalleId}`);
 
   const cantidad = Number(input.value);
 
@@ -369,6 +373,8 @@ if (!motivo) {
           venta_id: Number(ventaId),
           venta_detalle_id: detalleId,
           producto_id: productoId,
+          servicio_id: detalleTipo === "servicio" ? detalleId : null,
+          detalle_tipo: detalleTipo,
           tienda_id: tiendaId,
           usuario_id: usuario.id,
           cantidad,
@@ -381,7 +387,7 @@ if (!motivo) {
     const data = await response.json();
 
     if (!response.ok) {
-      mostrarMensaje(data.error || "Error al devolver producto.");
+      mostrarMensaje(data.detalle || data.error || "Error al devolver producto.");
       return;
     }
 
