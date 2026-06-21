@@ -271,18 +271,27 @@
   class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
 >
   <div class="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-700 p-6 shadow-2xl">
-    <h2 class="text-2xl font-black mb-2">Importe por caja</h2>
+    <h2 class="text-2xl font-black mb-2">Configurar importes</h2>
     <p id="configCajaEnvaseNombre" class="text-zinc-400 mb-5"></p>
 
     <div class="space-y-4">
       <div>
-        <label class="block text-sm text-zinc-400 mb-2">Cantidad por caja</label>
-        <input id="configCantidadPorCaja" type="number" min="1" step="1" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Ejemplo: 20" />
+        <label class="block text-sm text-zinc-400 mb-2">Importe unitario</label>
+        <input id="configImporteUnitario" type="number" min="0.01" step="0.01" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Ejemplo: 12" />
       </div>
 
-      <div>
-        <label class="block text-sm text-zinc-400 mb-2">Importe por caja</label>
-        <input id="configImportePorCaja" type="number" min="0" step="0.01" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Ejemplo: 100" />
+      <div id="grupoConfigCajaEnvase" class="space-y-4 border-t border-zinc-700 pt-4">
+        <p class="text-sm font-bold text-yellow-300">Configuracion especial por caja</p>
+
+        <div>
+          <label class="block text-sm text-zinc-400 mb-2">Cantidad por caja</label>
+          <input id="configCantidadPorCaja" type="number" min="1" step="1" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Ejemplo: 20" />
+        </div>
+
+        <div>
+          <label class="block text-sm text-zinc-400 mb-2">Importe por caja</label>
+          <input id="configImportePorCaja" type="number" min="0.01" step="0.01" class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3" placeholder="Ejemplo: 100" />
+        </div>
       </div>
     </div>
 
@@ -302,6 +311,6 @@
 
 <script src="./js/session.js?v=20260607"></script>
 <script src="./js/importes-envases.js?v=20260606"></script>
-<script src="./js/importes.js?v=20260606"></script>
+<script src="./js/importes.js?v=20260621"></script>
 </body>
 </html>

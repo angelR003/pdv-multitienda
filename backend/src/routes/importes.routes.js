@@ -5,6 +5,9 @@ const router = express.Router();
 const {
   verificarToken,
 } = require("../middlewares/auth.middleware");
+const {
+  permitirRoles,
+} = require("../middlewares/roles.middleware");
 
 const {
   obtenerTiposEnvase,
@@ -13,6 +16,7 @@ const {
   devolverImporte,
   obtenerInventarioEnvases,
   actualizarConfiguracionCajaEnvase,
+  actualizarConfiguracionEnvase,
   registrarAjusteEnvases,
   obtenerAjustesEnvases,
 } = require("../controllers/importes.controller");
@@ -49,7 +53,15 @@ router.post(
 router.patch(
   "/tipos-envase/:id/caja",
   verificarToken,
+  permitirRoles("administrador"),
   actualizarConfiguracionCajaEnvase
+);
+
+router.patch(
+  "/tipos-envase/:id/configuracion",
+  verificarToken,
+  permitirRoles("administrador"),
+  actualizarConfiguracionEnvase
 );
 
 router.post(

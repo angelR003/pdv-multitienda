@@ -611,6 +611,81 @@ const actualizarConfiguracionCajaEnvase = (req, res) => {
   );
 };
 
+const actualizarConfiguracionEnvase = (req, res) => {
+  const { id } = req.params;
+  const {
+    importe,
+    cantidad_por_caja,
+    importe_por_caja,
+  } = req.body;
+
+  const importeUnitario = Number(importe);
+  const cantidadPorCaja = cantidad_por_caja === "" || cantidad_por_caja == null
+    ? null
+    : Number(cantidad_por_caja);
+  const importePorCaja = importe_por_caja === "" || importe_por_caja == null
+    ? null
+    : Number(importe_por_caja);
+
+  if (!Number.isFinite(importeUnitario) || importeUnitario <= 0) {
+    return res.status(400).json({
+      error: "El importe unitario debe ser mayor a 0",
+    });
+  }
+
+  if (
+    cantidadPorCaja != null &&
+    (!Number.isInteger(cantidadPorCaja) || cantidadPorCaja <= 0)
+  ) {
+    return res.status(400).json({
+      error: "La cantidad por caja debe ser un entero mayor a 0",
+    });
+  }
+
+  if (importePorCaja != null && importePorCaja <= 0) {
+    return res.status(400).json({
+      error: "El importe por caja debe ser mayor a 0",
+    });
+  }
+
+  if ((cantidadPorCaja == null) !== (importePorCaja == null)) {
+    return res.status(400).json({
+      error: "Captura cantidad e importe por caja, o deja ambos vacios",
+    });
+  }
+
+  db.run(
+    `
+    UPDATE tipos_envase
+    SET
+      importe = ?,
+      cantidad_por_caja = ?,
+      importe_por_caja = ?
+    WHERE id = ?
+    AND activo = 1
+    `,
+    [importeUnitario, cantidadPorCaja, importePorCaja, id],
+    function (error) {
+      if (error) {
+        return res.status(500).json({
+          error: "Error al actualizar importes del envase",
+          detalle: error.message,
+        });
+      }
+
+      if (this.changes === 0) {
+        return res.status(404).json({
+          error: "Tipo de envase no encontrado",
+        });
+      }
+
+      return res.json({
+        mensaje: "Importes del envase actualizados correctamente",
+      });
+    }
+  );
+};
+
 const motivosAjusteEnvaseValidos = [
   "Carga inicial",
   "Entregado a proveedor",
@@ -880,6 +955,7 @@ module.exports = {
   devolverImporte,
   obtenerInventarioEnvases,
   actualizarConfiguracionCajaEnvase,
+  actualizarConfiguracionEnvase,
   registrarAjusteEnvases,
   obtenerAjustesEnvases,
 };

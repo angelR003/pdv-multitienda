@@ -1,5 +1,38 @@
 const db = require("../database/connection");
 
+const normalizarCampoTexto = (valor) => {
+  if (valor == null) return null;
+
+  if (typeof valor === "object") {
+    return normalizarCampoTexto(
+      valor.nombre ??
+      valor.name ??
+      valor.label ??
+      valor.descripcion ??
+      valor.value ??
+      null
+    );
+  }
+
+  const texto = String(valor).trim();
+
+  if (!texto || texto.toLowerCase() === "[object object]") {
+    return null;
+  }
+
+  return texto;
+};
+
+const normalizarProductoSalida = (producto) => ({
+  ...producto,
+  nombre: normalizarCampoTexto(producto.nombre) || "Producto sin nombre",
+  codigo_barras: normalizarCampoTexto(producto.codigo_barras),
+  categoria: normalizarCampoTexto(producto.categoria),
+  marca: normalizarCampoTexto(producto.marca),
+  presentacion: normalizarCampoTexto(producto.presentacion),
+  unidad: normalizarCampoTexto(producto.unidad) || "pieza",
+});
+
 const obtenerProductos = (req, res) => {
   const query = `
     SELECT
@@ -32,7 +65,7 @@ const obtenerProductos = (req, res) => {
       });
     }
 
-    res.json(rows);
+    res.json(rows.map(normalizarProductoSalida));
   });
 };
 const obtenerProductoPorCodigo = (req, res) => {
@@ -72,7 +105,7 @@ const obtenerProductoPorCodigo = (req, res) => {
       });
     }
 
-    res.json(row);
+    res.json(normalizarProductoSalida(row));
   });
 };
 
@@ -92,7 +125,7 @@ const obtenerProductosVentaManual = (req, res) => {
       });
     }
 
-    res.json(rows);
+    res.json(rows.map(normalizarProductoSalida));
   });
 };
 
@@ -115,19 +148,27 @@ const crearProducto = (req, res) => {
     tipo_envase_id
   } = req.body;
 
-  if (!tipo_producto || !nombre || !unidad || precio_global == null) {
+  const tipoProductoTexto = normalizarCampoTexto(tipo_producto);
+  const codigoBarrasTexto = normalizarCampoTexto(codigo_barras);
+  const nombreTexto = normalizarCampoTexto(nombre);
+  const categoriaTexto = normalizarCampoTexto(categoria);
+  const marcaTexto = normalizarCampoTexto(marca);
+  const presentacionTexto = normalizarCampoTexto(presentacion);
+  const unidadTexto = normalizarCampoTexto(unidad);
+
+  if (!tipoProductoTexto || !nombreTexto || !unidadTexto || precio_global == null) {
     return res.status(400).json({
       error: "Tipo, nombre, unidad y precio son obligatorios",
     });
   }
 
-  if (!["codigo_barras", "peso_variable", "manual"].includes(tipo_producto)) {
+  if (!["codigo_barras", "peso_variable", "manual"].includes(tipoProductoTexto)) {
     return res.status(400).json({
       error: "Tipo de producto inválido",
     });
   }
 
-  if (tipo_producto === "codigo_barras" && !codigo_barras) {
+  if (tipoProductoTexto === "codigo_barras" && !codigoBarrasTexto) {
     return res.status(400).json({
       error: "El código de barras es obligatorio para este tipo de producto",
     });
@@ -169,13 +210,13 @@ const crearProducto = (req, res) => {
   db.run(
     query,
     [
-      tipo_producto,
-      codigo_barras || null,
-      nombre,
-      categoria || null,
-      marca || null,
-      presentacion || null,
-      unidad,
+      tipoProductoTexto,
+      codigoBarrasTexto,
+      nombreTexto,
+      categoriaTexto,
+      marcaTexto,
+      presentacionTexto,
+      unidadTexto,
       precio_global,
       costo_compra || 0,
       requiere_caducidad ? 1 : 0,
@@ -228,7 +269,7 @@ const obtenerProductoPorId = (req, res) => {
       });
     }
 
-    res.json(row);
+    res.json(normalizarProductoSalida(row));
   });
 };
 
@@ -252,6 +293,20 @@ const actualizarProducto = (req, res) => {
     es_retornable,
     tipo_envase_id
   } = req.body;
+
+  const tipoProductoTexto = normalizarCampoTexto(tipo_producto);
+  const codigoBarrasTexto = normalizarCampoTexto(codigo_barras);
+  const nombreTexto = normalizarCampoTexto(nombre);
+  const categoriaTexto = normalizarCampoTexto(categoria);
+  const marcaTexto = normalizarCampoTexto(marca);
+  const presentacionTexto = normalizarCampoTexto(presentacion);
+  const unidadTexto = normalizarCampoTexto(unidad);
+
+  if (!tipoProductoTexto || !nombreTexto || !unidadTexto || precio_global == null) {
+    return res.status(400).json({
+      error: "Tipo, nombre, unidad y precio son obligatorios",
+    });
+  }
 
     if (es_retornable && !tipo_envase_id) {
     return res.status(400).json({
@@ -289,13 +344,13 @@ const query = `
   db.run(
     query,
    [
-  tipo_producto,
-  codigo_barras || null,
-  nombre,
-  categoria,
-  marca,
-  presentacion,
-  unidad,
+  tipoProductoTexto,
+  codigoBarrasTexto,
+  nombreTexto,
+  categoriaTexto,
+  marcaTexto,
+  presentacionTexto,
+  unidadTexto,
   precio_global,
   costo_compra,
   requiere_caducidad ? 1 : 0,
@@ -432,7 +487,7 @@ const obtenerTodosProductosAdmin = (req, res) => {
       });
     }
 
-    res.json(rows);
+    res.json(rows.map(normalizarProductoSalida));
   });
 };
 

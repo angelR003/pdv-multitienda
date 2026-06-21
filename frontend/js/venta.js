@@ -762,6 +762,17 @@ async function cobrarVenta() {
     return;
   }
 
+  const metodoPagoSeleccionado = metodoPago.value;
+  const clienteFiadoSeleccionado = clienteFiado.value;
+
+  if (
+    metodoPagoSeleccionado === "fiado" &&
+    (!clienteFiadoSeleccionado || clienteFiadoSeleccionado === "nuevo")
+  ) {
+    mostrarMensaje("Selecciona el cliente para fiado.");
+    return;
+  }
+
   const envasesVenta = await pedirEnvasesVenta();
 
   if (envasesVenta === null) {
@@ -785,10 +796,12 @@ async function cobrarVenta() {
   const body = {
     tienda_id: tiendaId,
     usuario_id: usuarioId,
-    metodo_pago: metodoPago.value,
+    metodo_pago: metodoPagoSeleccionado,
 
     cliente_fiado_id:
-      metodoPago.value === "fiado" ? Number(clienteFiado.value) : null,
+      metodoPagoSeleccionado === "fiado"
+        ? Number(clienteFiadoSeleccionado)
+        : null,
 
     productos: carrito
       .filter((item) => item.tipo_linea !== "servicio_electronico")
@@ -811,13 +824,9 @@ async function cobrarVenta() {
     btnCobrar.disabled = true;
     btnCobrar.classList.add("opacity-60", "cursor-not-allowed");
 
-    if (metodoPago.value === "fiado" && !clienteFiado.value) {
-      mostrarMensaje("Selecciona el cliente para fiado.");
-      return;
-    }
-    if (metodoPago.value === "fiado") {
+    if (metodoPagoSeleccionado === "fiado") {
       const cliente = clientesFiado.find(
-        (c) => Number(c.id) === Number(clienteFiado.value),
+        (c) => Number(c.id) === Number(clienteFiadoSeleccionado),
       );
 
       if (cliente) {
@@ -1016,31 +1025,6 @@ function calcularCambio() {
     cambioVenta.className = "text-2xl font-bold text-yellow-300";
   }
 }
-async function cargarClientesFiado() {
-  try {
-    const response = await fetch(`${API_URL}/fiados/clientes`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    clientesFiado = await response.json();
-
-    clienteFiado.innerHTML = `<option value="">Selecciona cliente...</option>`;
-
-    clientesFiado.forEach((cliente) => {
-      const option = document.createElement("option");
-
-      option.value = cliente.id;
-      option.textContent = `${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}`;
-
-      clienteFiado.appendChild(option);
-    });
-  } catch (error) {
-    mostrarMensaje("Error al cargar clientes fiados.");
-  }
-}
-
 async function crearDeudorDesdeVenta() {
   const body = {
     nombre_completo: nuevoDeudorNombre.value.trim(),
@@ -1088,6 +1072,8 @@ async function crearDeudorDesdeVenta() {
 }
 
 async function cargarClientesFiado() {
+  const clienteSeleccionadoAntes = clienteFiado.value;
+
   try {
     const response = await fetch(`${API_URL}/fiados/clientes`, {
       headers: {
@@ -1122,6 +1108,14 @@ async function cargarClientesFiado() {
     optionNuevo.value = "nuevo";
     optionNuevo.textContent = "+ Crear nuevo deudor";
     clienteFiado.appendChild(optionNuevo);
+
+    const seleccionSigueDisponible = Array.from(clienteFiado.options).some(
+      (option) => option.value === clienteSeleccionadoAntes,
+    );
+
+    if (seleccionSigueDisponible) {
+      clienteFiado.value = clienteSeleccionadoAntes;
+    }
   } catch (error) {
     console.error("ERROR CLIENTES FIADO:", error);
     mostrarMensaje("Error al cargar clientes fiados.");
@@ -1370,10 +1364,12 @@ async function pedirEnvasesVenta() {
   listaEnvasesVenta.innerHTML = "";
   actualizarResumenImportesEnvases();
 
+  const clienteVentaFiada = obtenerClienteFiadoSeleccionado();
+
   const opcionesClientes = clientesFiado
     .map(
       (cliente) =>
-        `<option value="${cliente.id}">${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}</option>`
+        `<option value="${cliente.id}" ${Number(cliente.id) === Number(clienteVentaFiada?.id) ? "selected" : ""}>${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}</option>`
     )
     .join("");
 

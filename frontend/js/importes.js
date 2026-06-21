@@ -44,6 +44,8 @@ const btnGuardarAjusteEnvases = document.getElementById("btnGuardarAjusteEnvases
 const tablaAjustesEnvases = document.getElementById("tablaAjustesEnvases");
 const modalConfigCajaEnvase = document.getElementById("modalConfigCajaEnvase");
 const configCajaEnvaseNombre = document.getElementById("configCajaEnvaseNombre");
+const configImporteUnitario = document.getElementById("configImporteUnitario");
+const grupoConfigCajaEnvase = document.getElementById("grupoConfigCajaEnvase");
 const configCantidadPorCaja = document.getElementById("configCantidadPorCaja");
 const configImportePorCaja = document.getElementById("configImportePorCaja");
 const mensajeConfigCajaEnvase = document.getElementById("mensajeConfigCajaEnvase");
@@ -414,28 +416,31 @@ async function cargarInventarioEnvases() {
 
             ${
               envase.categoria === "cerveza"
+                ? Number(envase.cantidad_por_caja || 0) > 0 &&
+                  Number(envase.importe_por_caja || 0) > 0
+                  ? `
+                    <p class="text-yellow-300 text-sm mt-1">
+                      Caja: ${envase.cantidad_por_caja} por $${Number(envase.importe_por_caja).toFixed(2)}
+                    </p>
+                  `
+                  : `
+                    <p class="text-zinc-600 text-sm mt-1">
+                      Sin importe por caja
+                    </p>
+                  `
+                : ""
+            }
+
+            ${
+              usuario.rol === "administrador"
                 ? `
-                  ${
-                    Number(envase.cantidad_por_caja || 0) > 0 &&
-                    Number(envase.importe_por_caja || 0) > 0
-                      ? `
-                        <p class="text-yellow-300 text-sm mt-1">
-                          Caja: ${envase.cantidad_por_caja} por $${Number(envase.importe_por_caja).toFixed(2)}
-                        </p>
-                      `
-                      : `
-                        <p class="text-zinc-600 text-sm mt-1">
-                          Sin importe por caja
-                        </p>
-                      `
-                  }
                   <button
                     type="button"
                     class="mt-3 bg-yellow-400 hover:bg-yellow-300 text-black px-3 py-2 rounded-xl text-sm font-bold"
                     style="background:#facc15;color:#000;border:1px solid #fde047;box-shadow:0 0 0 1px rgba(250,204,21,.25);"
                     onclick="abrirModalConfigCajaEnvase(${envase.id})"
                   >
-                    Caja
+                    Editar importes
                   </button>
                 `
                 : ""
@@ -488,20 +493,23 @@ function abrirModalConfigCajaEnvase(tipoEnvaseId) {
     (item) => Number(item.id) === Number(tipoEnvaseId)
   );
 
-  if (!envase || envase.categoria !== "cerveza") {
-    mostrarMensaje("El importe por caja solo aplica para envases de cerveza.");
+  if (!envase) {
+    mostrarMensaje("Tipo de envase no encontrado.");
     return;
   }
 
   configCajaEnvasePendiente = envase;
   configCajaEnvaseNombre.textContent = `${envase.categoria} - ${envase.nombre}`;
+  configImporteUnitario.value = Number(envase.importe || 0).toFixed(2);
   configCantidadPorCaja.value = envase.cantidad_por_caja || "";
   configImportePorCaja.value = envase.importe_por_caja || "";
+  grupoConfigCajaEnvase.classList.toggle("hidden", envase.categoria !== "cerveza");
   mensajeConfigCajaEnvase.textContent = "";
   modalConfigCajaEnvase.classList.remove("hidden");
 
   setTimeout(() => {
-    configCantidadPorCaja.focus();
+    configImporteUnitario.focus();
+    configImporteUnitario.select();
   }, 100);
 }
 
@@ -515,12 +523,20 @@ function cerrarModalConfigCajaEnvase() {
 async function guardarConfigCajaEnvase() {
   if (configCajaEnvaseEnProceso || !configCajaEnvasePendiente) return;
 
-  const cantidadPorCaja = configCantidadPorCaja.value === ""
+  const importeUnitario = Number(configImporteUnitario.value);
+  const esEnvaseCerveza = configCajaEnvasePendiente.categoria === "cerveza";
+  const cantidadPorCaja = !esEnvaseCerveza || configCantidadPorCaja.value === ""
     ? null
     : Number(configCantidadPorCaja.value);
-  const importePorCaja = configImportePorCaja.value === ""
+  const importePorCaja = !esEnvaseCerveza || configImportePorCaja.value === ""
     ? null
     : Number(configImportePorCaja.value);
+
+  if (!Number.isFinite(importeUnitario) || importeUnitario <= 0) {
+    mensajeConfigCajaEnvase.textContent =
+      "El importe unitario debe ser mayor a 0.";
+    return;
+  }
 
   if (
     cantidadPorCaja != null &&
@@ -543,7 +559,7 @@ async function guardarConfigCajaEnvase() {
 
   try {
     const response = await fetch(
-      `${API_URL}/importes/tipos-envase/${configCajaEnvasePendiente.id}/caja`,
+      `${API_URL}/importes/tipos-envase/${configCajaEnvasePendiente.id}/configuracion`,
       {
         method: "PATCH",
         headers: {
@@ -551,6 +567,7 @@ async function guardarConfigCajaEnvase() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          importe: importeUnitario,
           cantidad_por_caja: cantidadPorCaja,
           importe_por_caja: importePorCaja,
         }),
