@@ -169,8 +169,7 @@ btnCobrar.addEventListener("click", async (event) => {
 btnLimpiar.addEventListener("click", (event) => {
   event.preventDefault();
   carrito = [];
-  pagoCon.value = "";
-  calcularCambio();
+  reiniciarEstadoPagoVenta();
   ocultarResultadosBusquedaManual();
   renderCarrito();
   mostrarMensaje("Venta limpiada.");
@@ -207,6 +206,7 @@ metodoPago.addEventListener("change", () => {
   } else {
     grupoClienteFiado.classList.add("hidden");
     clienteFiado.value = "";
+    formNuevoDeudorVenta.classList.add("hidden");
   }
 });
 
@@ -498,7 +498,7 @@ function agregarProductoManual() {
 
   const subtotal = calcularSubtotalOperativo(datosProducto, cantidad * precio);
 
-carrito.push({
+agregarItemAlInicio({
   producto_id,
   nombre,
   cantidad,
@@ -586,7 +586,7 @@ function agregarServicioAlCarrito(tipo, montoBase) {
     ? `Recarga $${monto.toFixed(2)}`
     : "Pago de servicio";
 
-  carrito.push({
+  agregarItemAlInicio({
     carrito_id: `servicio-${Date.now()}-${consecutivoLineaEspecial++}`,
     tipo_linea: "servicio_electronico",
     servicio_tipo: tipo,
@@ -621,10 +621,11 @@ function agregarAlCarrito(producto) {
     existente.tipo_envase_id = producto.tipo_envase_id
       ? Number(producto.tipo_envase_id)
       : existente.tipo_envase_id || null;
+    moverItemAlInicio(existente);
   } else {
     const precio = Number(producto.precio_aplicable || producto.precio_global);
 
-    carrito.push({
+    agregarItemAlInicio({
       producto_id: producto.id,
       nombre: producto.nombre,
       cantidad: 1,
@@ -643,6 +644,21 @@ function agregarAlCarrito(producto) {
 
   recalcularCarrito();
   renderCarrito();
+}
+
+function agregarItemAlInicio(item) {
+  carrito.unshift(item);
+}
+
+function moverItemAlInicio(item) {
+  const index = carrito.indexOf(item);
+
+  if (index <= 0) {
+    return;
+  }
+
+  carrito.splice(index, 1);
+  carrito.unshift(item);
 }
 
 function renderCarrito() {
@@ -872,8 +888,7 @@ async function cobrarVenta() {
     mostrarMensaje(`Venta registrada. Total: $${data.total.toFixed(2)}`);
 
     carrito = [];
-    pagoCon.value = "";
-    calcularCambio();
+    reiniciarEstadoPagoVenta();
     renderCarrito();
     codigoInput.focus();
   } catch (error) {
@@ -887,6 +902,15 @@ async function cobrarVenta() {
 
 function mostrarMensaje(texto) {
   mensaje.textContent = texto;
+}
+
+function reiniciarEstadoPagoVenta() {
+  pagoCon.value = "";
+  metodoPago.value = "efectivo";
+  clienteFiado.value = "";
+  grupoClienteFiado.classList.add("hidden");
+  formNuevoDeudorVenta.classList.add("hidden");
+  calcularCambio();
 }
 
 function redondearCentavos(monto) {

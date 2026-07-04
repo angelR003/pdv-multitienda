@@ -5,232 +5,248 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
   <title>Cortes - Las Gardenias</title>
-
-
   <link rel="icon" type="image/png" href="./assets/gardenia.png">
   <link rel="stylesheet" href="./css/styles.css">
 </head>
 
 <body class="bg-zinc-950 text-white min-h-screen">
-
-  <main class="max-w-5xl mx-auto p-6">
-
-    <header class="flex items-center justify-between mb-8">
-
+  <main class="max-w-6xl mx-auto p-6">
+    <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
       <div class="flex items-center gap-4">
-
         <a
           href="./dashboard.html"
           class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm"
         >
-          ← Menú
+          &larr; Menu
         </a>
 
         <div>
-          <h1 class="text-4xl font-black">
-            Corte de caja
-          </h1>
-
+          <h1 class="text-4xl font-black">Cerrar caja</h1>
           <p class="text-zinc-400 mt-2">
-            Arqueo y cierre de efectivo.
+            Cuenta el efectivo fisico y comparalo contra lo que el sistema espera.
           </p>
         </div>
-
-      </div>
-
-    </header>
-
-    <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-        <div>
-          <label class="block text-sm text-zinc-400 mb-2">
-            Dinero contado
-          </label>
-
-          <input
-            id="dineroReal"
-            type="number"
-            step="0.01"
-            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
-            placeholder="Dinero real en caja..."
-          />
-        </div>
-
-      </div>
-
-      <div class="mt-5">
-        <label class="block text-sm text-zinc-400 mb-2">
-          Observaciones
-        </label>
-
-        <textarea
-          id="observaciones"
-          rows="4"
-          class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
-          placeholder="Observaciones..."
-        ></textarea>
       </div>
 
       <button
         type="button"
-        id="btnCorte"
-        class="mt-8 w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black py-4 rounded-xl text-xl"
+        id="btnActualizarResumen"
+        class="self-start md:self-auto bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-xl text-sm font-bold"
       >
-        Realizar corte
+        Actualizar resumen
       </button>
+    </header>
 
-      <p
-        id="mensaje"
-        class="mt-5 text-sm text-zinc-400"
-      ></p>
+    <section class="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
+      <div class="space-y-6">
+        <section id="resumenCorteSection" class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+          <div class="p-6 border-b border-zinc-800">
+            <p class="text-sm font-bold uppercase tracking-wide text-cyan-300">
+              Paso 1
+            </p>
+            <h2 class="text-3xl font-black mt-1">
+              Efectivo esperado por el sistema
+            </h2>
+            <p id="rangoCorte" class="text-zinc-400 mt-2">
+              Calculando movimientos desde el ultimo corte...
+            </p>
+          </div>
 
-    </section>
+          <div class="divide-y divide-zinc-800">
+            <div class="flex items-center justify-between gap-4 p-5">
+              <div>
+                <p class="font-black">Ventas cobradas en efectivo</p>
+                <p id="ventasEfectivoConteo" class="text-sm text-zinc-500">0 operaciones</p>
+              </div>
+              <p id="ventasEfectivoBrutas" class="text-2xl font-black text-green-400">$0.00</p>
+            </div>
 
-    <section
-      id="resultadoCorte"
-      class="hidden mt-8 bg-zinc-900 border border-zinc-800 rounded-3xl p-6"
-    >
+            <div class="flex items-center justify-between gap-4 p-5">
+              <div>
+                <p class="font-black">Devoluciones pagadas en efectivo</p>
+                <p id="devolucionesEfectivoConteo" class="text-sm text-zinc-500">0 devoluciones</p>
+              </div>
+              <p id="devolucionesEfectivo" class="text-2xl font-black text-red-400">-$0.00</p>
+            </div>
 
-      <h2 class="text-3xl font-black mb-6">
-        Resultado del corte
-      </h2>
+            <div class="flex items-center justify-between gap-4 p-5">
+              <div>
+                <p class="font-black">Entradas de caja</p>
+                <p class="text-sm text-zinc-500">Fondo inicial, entradas y ajustes positivos.</p>
+              </div>
+              <p id="entradasCaja" class="text-2xl font-black text-blue-400">+$0.00</p>
+            </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="flex items-center justify-between gap-4 p-5">
+              <div>
+                <p class="font-black">Salidas de caja</p>
+                <p class="text-sm text-zinc-500">Retiros, pagos a proveedor y salidas.</p>
+              </div>
+              <p id="salidasCaja" class="text-2xl font-black text-red-400">-$0.00</p>
+            </div>
 
-        <div class="bg-zinc-950 rounded-2xl p-5">
-          <p class="text-zinc-400 text-sm">
-            Ventas efectivo netas
-          </p>
+            <div class="flex items-center justify-between gap-4 p-6 bg-zinc-950">
+              <div>
+                <p class="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                  Total esperado
+                </p>
+                <p class="text-zinc-400 text-sm">
+                  Esto es lo que deberia haber en billetes y monedas.
+                </p>
+              </div>
+              <p id="dineroEsperado" class="text-4xl font-black text-yellow-300">$0.00</p>
+            </div>
+          </div>
+        </section>
 
-          <p
-            id="ventasEfectivo"
-            class="text-3xl font-black text-green-400 mt-2"
-          >
-            $0.00
-          </p>
-        </div>
+        <section id="detalleCorteSection" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <div class="flex items-start justify-between gap-4 mb-5">
+            <div>
+              <p class="text-sm font-bold uppercase tracking-wide text-zinc-400">
+                Detalle
+              </p>
+              <h2 class="text-3xl font-black mt-1">
+                Movimientos incluidos
+              </h2>
+            </div>
+          </div>
 
-        <div class="bg-zinc-950 rounded-2xl p-5">
-  <p class="text-zinc-400 text-sm">
-    Devoluciones efectivo
-  </p>
+          <div class="space-y-4">
+            <details class="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+              <summary class="cursor-pointer font-black">
+                Entradas y salidas de caja
+              </summary>
+              <div id="detalleMovimientosCaja" class="mt-4 overflow-x-auto"></div>
+            </details>
 
-  <p
-    id="devolucionesEfectivo"
-    class="text-3xl font-black text-red-400 mt-2"
-  >
-    $0.00
-  </p>
-</div>
-
-        <div class="bg-zinc-950 rounded-2xl p-5">
-          <p class="text-zinc-400 text-sm">
-            Entradas caja
-          </p>
-
-          <p
-            id="entradasCaja"
-            class="text-3xl font-black text-blue-400 mt-2"
-          >
-            $0.00
-          </p>
-        </div>
-
-        <div class="bg-zinc-950 rounded-2xl p-5">
-          <p class="text-zinc-400 text-sm">
-            Salidas caja
-          </p>
-
-          <p
-            id="salidasCaja"
-            class="text-3xl font-black text-red-400 mt-2"
-          >
-            $0.00
-          </p>
-        </div>
-
-        <div class="bg-zinc-950 rounded-2xl p-5">
-          <p class="text-zinc-400 text-sm">
-            Dinero esperado
-          </p>
-
-          <p
-            id="dineroEsperado"
-            class="text-3xl font-black text-yellow-300 mt-2"
-          >
-            $0.00
-          </p>
-        </div>
-
-        <div class="bg-zinc-950 rounded-2xl p-5">
-          <p class="text-zinc-400 text-sm">
-            Dinero real
-          </p>
-
-          <p
-            id="dineroRealResultado"
-            class="text-3xl font-black text-white mt-2"
-          >
-            $0.00
-          </p>
-        </div>
-
-        <div class="bg-zinc-950 rounded-2xl p-5">
-          <p class="text-zinc-400 text-sm">
-            Diferencia
-          </p>
-
-          <p
-            id="diferencia"
-            class="text-3xl font-black mt-2"
-          >
-            $0.00
-          </p>
-        </div>
-
+            <details class="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+              <summary class="cursor-pointer font-black">
+                Devoluciones en efectivo
+              </summary>
+              <div id="detalleDevolucionesCaja" class="mt-4 overflow-x-auto"></div>
+            </details>
+          </div>
+        </section>
       </div>
 
+      <aside class="space-y-6">
+        <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <p class="text-sm font-bold uppercase tracking-wide text-cyan-300">
+            Paso 2
+          </p>
+          <h2 class="text-3xl font-black mt-1">
+            Efectivo contado
+          </h2>
+          <p class="text-zinc-400 mt-2">
+            Cuenta la caja fisica y escribe el total contado.
+          </p>
+
+          <div
+            id="avisoConteoCiego"
+            class="hidden mt-5 rounded-2xl border border-cyan-500/40 bg-cyan-500/10 p-4 text-sm text-cyan-100"
+          >
+            El corte se revisa despues de capturar el efectivo contado. Primero cuenta la caja completa; al cerrar se mostrara si hubo faltante, sobrante o si cuadro.
+          </div>
+
+          <label class="block text-sm text-zinc-400 mt-6 mb-2">
+            Billetes y monedas contados
+          </label>
+          <input
+            id="dineroReal"
+            type="number"
+            step="0.01"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-4 text-2xl font-black"
+            placeholder="Ejemplo: 1450.00"
+          />
+
+          <div id="previewDiferencia" class="mt-5 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+            <p class="text-sm text-zinc-400">Resultado antes de cerrar</p>
+            <p id="previewDiferenciaTexto" class="mt-2 text-2xl font-black text-zinc-300">
+              Escribe el efectivo contado.
+            </p>
+          </div>
+
+          <label class="block text-sm text-zinc-400 mt-5 mb-2">
+            Observaciones
+          </label>
+          <textarea
+            id="observaciones"
+            rows="4"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+            placeholder="Ejemplo: faltante revisado con encargado..."
+          ></textarea>
+
+          <button
+            type="button"
+            id="btnCorte"
+            class="mt-6 w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black py-4 rounded-xl text-xl"
+          >
+            Cerrar caja
+          </button>
+
+          <p id="mensaje" class="mt-5 text-sm text-zinc-400"></p>
+        </section>
+
+        <section
+          id="resultadoCorte"
+          class="hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-6"
+        >
+          <p class="text-sm font-bold uppercase tracking-wide text-green-300">
+            Corte registrado
+          </p>
+          <h2 id="resultadoTitulo" class="text-3xl font-black mt-1">
+            Caja correcta
+          </h2>
+
+          <div class="grid grid-cols-1 gap-3 mt-5">
+            <div class="bg-zinc-950 rounded-2xl p-4">
+              <p class="text-zinc-400 text-sm">Efectivo esperado</p>
+              <p id="dineroEsperadoResultado" class="text-2xl font-black text-yellow-300 mt-1">$0.00</p>
+            </div>
+
+            <div class="bg-zinc-950 rounded-2xl p-4">
+              <p class="text-zinc-400 text-sm">Efectivo contado</p>
+              <p id="dineroRealResultado" class="text-2xl font-black text-white mt-1">$0.00</p>
+            </div>
+
+            <div class="bg-zinc-950 rounded-2xl p-4">
+              <p class="text-zinc-400 text-sm">Diferencia</p>
+              <p id="diferencia" class="text-2xl font-black mt-1">$0.00</p>
+            </div>
+          </div>
+        </section>
+      </aside>
     </section>
 
     <section
-  id="historialCortes"
-  class="hidden mt-8 bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden"
->
-  <div class="p-6 border-b border-zinc-800">
-    <h2 class="text-3xl font-black">
-      Historial de cortes
-    </h2>
+      id="historialCortes"
+      class="hidden mt-8 bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden"
+    >
+      <div class="p-6 border-b border-zinc-800">
+        <h2 class="text-3xl font-black">Historial de cortes</h2>
+        <p class="text-zinc-400 mt-2">Solo visible para administradores.</p>
+      </div>
 
-    <p class="text-zinc-400 mt-2">
-      Solo visible para administradores.
-    </p>
-  </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead class="bg-zinc-800 text-zinc-300">
+            <tr>
+              <th class="p-3">Fecha</th>
+              <th class="p-3">Usuario</th>
+              <th class="p-3">Esperado</th>
+              <th class="p-3">Contado</th>
+              <th class="p-3">Resultado</th>
+              <th class="p-3">Observaciones</th>
+            </tr>
+          </thead>
 
-  <table class="w-full text-left">
-    <thead class="bg-zinc-800 text-zinc-300">
-      <tr>
-        <th class="p-3">Fecha</th>
-        <th class="p-3">Usuario</th>
-        <th class="p-3">Esperado</th>
-        <th class="p-3">Real</th>
-        <th class="p-3">Diferencia</th>
-        <th class="p-3">Observaciones</th>
-      </tr>
-    </thead>
-
-    <tbody
-      id="tablaCortes"
-      class="divide-y divide-zinc-800"
-    ></tbody>
-  </table>
-</section>
-
+          <tbody id="tablaCortes" class="divide-y divide-zinc-800"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <script src="./js/session.js?v=20260607"></script>
-  <script src="./js/cortes.js"></script>
-
+  <script src="./js/cortes.js?v=20260704"></script>
 </body>
 </html>

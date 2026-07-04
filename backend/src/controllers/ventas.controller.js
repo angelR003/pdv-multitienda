@@ -1163,9 +1163,21 @@ const rollback = (res, mensaje) => {
 };
 
 const obtenerVentas = (req, res) => {
-  const { tienda_id } = req.query;
+  const {
+    tienda_id,
+    busqueda,
+    periodo,
+    fecha_inicio,
+    fecha_fin,
+  } = req.query;
 
-  let query = `
+  const limite = Math.min(Math.max(Number(req.query.limite) || 60, 1), 60);
+  const pagina = Math.max(Number(req.query.pagina) || 1, 1);
+  const offset = (pagina - 1) * limite;
+
+  const fechaLocalVenta = "DATE(datetime(v.fecha_venta, 'localtime'))";
+
+  const selectBase = `
     SELECT
       v.id,
       v.folio,
@@ -1194,26 +1206,98 @@ const obtenerVentas = (req, res) => {
     params.push(req.usuario.id);
   }
 
-  if (condiciones.length > 0) {
-    query += `
-      WHERE ${condiciones.join(" AND ")}
-    `;
+  const hoy = new Date();
+  const hoyLocal = formatearFechaInputLocal(hoy);
+
+  if (periodo === "hoy") {
+    condiciones.push(`${fechaLocalVenta} = ?`);
+    params.push(hoyLocal);
+  } else if (periodo === "ayer") {
+    const ayer = new Date(hoy);
+    ayer.setDate(hoy.getDate() - 1);
+    condiciones.push(`${fechaLocalVenta} = ?`);
+    params.push(formatearFechaInputLocal(ayer));
+  } else {
+    if (fecha_inicio) {
+      condiciones.push(`${fechaLocalVenta} >= ?`);
+      params.push(fecha_inicio);
+    }
+
+    if (fecha_fin) {
+      condiciones.push(`${fechaLocalVenta} <= ?`);
+      params.push(fecha_fin);
+    }
   }
 
-  query += `
-    ORDER BY v.fecha_venta DESC
+  if (busqueda) {
+    const textoBusqueda = `%${String(busqueda).trim()}%`;
+    condiciones.push(`
+      (
+        v.folio LIKE ?
+        OR u.nombre LIKE ?
+        OR v.metodo_pago LIKE ?
+        OR v.estado LIKE ?
+      )
+    `);
+    params.push(textoBusqueda, textoBusqueda, textoBusqueda, textoBusqueda);
+  }
+
+  const whereSql =
+    condiciones.length > 0
+      ? `WHERE ${condiciones.join(" AND ")}`
+      : "";
+
+  const query = `
+    ${selectBase}
+    ${whereSql}
+    ORDER BY v.fecha_venta DESC, v.id DESC
+    LIMIT ? OFFSET ?
   `;
 
-  db.all(query, params, (error, rows) => {
-    if (error) {
+  const queryTotal = `
+    SELECT COUNT(*) AS total
+    FROM ventas v
+    INNER JOIN tiendas t ON t.id = v.tienda_id
+    INNER JOIN usuarios u ON u.id = v.usuario_id
+    ${whereSql}
+  `;
+
+  db.get(queryTotal, params, (errorTotal, totalRow) => {
+    if (errorTotal) {
       return res.status(500).json({
-        error: "Error al obtener ventas",
+        error: "Error al contar ventas",
       });
     }
 
-    res.json(rows);
+    db.all(query, [...params, limite, offset], (error, rows) => {
+      if (error) {
+        return res.status(500).json({
+          error: "Error al obtener ventas",
+        });
+      }
+
+      const total = Number(totalRow?.total || 0);
+
+      res.json({
+        ventas: rows,
+        paginacion: {
+          pagina,
+          limite,
+          total,
+          total_paginas: Math.max(Math.ceil(total / limite), 1),
+        },
+      });
+    });
   });
 };
+
+function formatearFechaInputLocal(fecha) {
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, "0");
+  const day = String(fecha.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
 
 const obtenerVentaPorId = (req, res) => {
   const { id } = req.params;

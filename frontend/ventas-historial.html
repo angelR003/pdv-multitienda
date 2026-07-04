@@ -36,15 +36,73 @@
 
     </header>
 
-    <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 mb-8">
+    <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 mb-8 space-y-5">
+      <div class="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4">
+        <input
+          id="busqueda"
+          type="text"
+          placeholder="Buscar folio, usuario, pago o estado..."
+          class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+        />
 
-      <input
-        id="busqueda"
-        type="text"
-        placeholder="Buscar folio..."
-        class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
-      />
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            id="btnHoy"
+            class="bg-green-500 text-black hover:bg-green-400 px-4 py-3 rounded-xl font-black"
+          >
+            Hoy
+          </button>
+          <button
+            type="button"
+            id="btnAyer"
+            class="bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-xl font-bold"
+          >
+            Ayer
+          </button>
+          <button
+            type="button"
+            id="btnRango"
+            class="bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-xl font-bold"
+          >
+            Rango
+          </button>
+        </div>
+      </div>
 
+      <div id="filtrosRango" class="hidden grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4">
+        <div>
+          <label class="block text-sm text-zinc-400 mb-2">Fecha inicio</label>
+          <input
+            id="fechaInicio"
+            type="date"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm text-zinc-400 mb-2">Fecha fin</label>
+          <input
+            id="fechaFin"
+            type="date"
+            class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+          />
+        </div>
+
+        <div class="flex items-end">
+          <button
+            type="button"
+            id="btnAplicarRango"
+            class="w-full bg-pink-500 hover:bg-pink-400 text-black px-4 py-3 rounded-xl font-black"
+          >
+            Aplicar
+          </button>
+        </div>
+      </div>
+
+      <p id="resumenPaginacion" class="text-sm text-zinc-400">
+        Cargando ventas...
+      </p>
     </section>
 
     <section class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
@@ -74,10 +132,32 @@
 
     </section>
 
+    <section class="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <button
+        type="button"
+        id="btnAnterior"
+        class="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed px-5 py-3 rounded-xl font-bold"
+      >
+        Anterior
+      </button>
+
+      <p id="paginaActual" class="text-center text-zinc-400 font-bold">
+        Pagina 1
+      </p>
+
+      <button
+        type="button"
+        id="btnSiguiente"
+        class="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed px-5 py-3 rounded-xl font-bold"
+      >
+        Siguiente
+      </button>
+    </section>
+
   </main>
 
   <script src="./js/session.js?v=20260607"></script>
-  <script src="./js/ventas-historial.js"></script>
+  <script src="./js/ventas-historial.js?v=20260704"></script>
 
 </body>
 </html>

@@ -237,35 +237,69 @@ function dibujarGraficaVentasDia(datos) {
     return;
   }
 
-  const margen = 34;
-  const maximo = Math.max(...datos.map((item) => Number(item.total || 0)), 1);
-  const anchoBarra = (width - margen * 2) / datos.length;
+  const datosGrafica = agruparVentasParaGrafica(datos);
+  const margenIzquierdo = 46;
+  const margenDerecho = 18;
+  const margenSuperior = 20;
+  const margenInferior = datosGrafica.length > 18 ? 44 : 34;
+  const areaAncho = width - margenIzquierdo - margenDerecho;
+  const areaAlto = height - margenSuperior - margenInferior;
+  const maximo = Math.max(...datosGrafica.map((item) => Number(item.total || 0)), 1);
+  const anchoSlot = areaAncho / datosGrafica.length;
+  const anchoBarra = Math.max(Math.min(anchoSlot * 0.72, 34), 3);
+  const saltoEtiqueta = Math.max(1, Math.ceil(datosGrafica.length / 12));
 
   ctx.strokeStyle = "#27272a";
   ctx.lineWidth = 1;
+  ctx.fillStyle = "#71717a";
+  ctx.font = "10px sans-serif";
+  ctx.textAlign = "right";
 
   for (let i = 0; i < 4; i++) {
-    const y = margen + ((height - margen * 2) / 3) * i;
+    const y = margenSuperior + (areaAlto / 3) * i;
+    const valorLinea = maximo - (maximo / 3) * i;
     ctx.beginPath();
-    ctx.moveTo(margen, y);
-    ctx.lineTo(width - margen, y);
+    ctx.moveTo(margenIzquierdo, y);
+    ctx.lineTo(width - margenDerecho, y);
     ctx.stroke();
+    ctx.fillText(formatearDineroCompacto(valorLinea), margenIzquierdo - 8, y + 3);
   }
 
-  datos.forEach((item, index) => {
+  datosGrafica.forEach((item, index) => {
     const valor = Number(item.total || 0);
-    const alto = (valor / maximo) * (height - margen * 2);
-    const x = margen + index * anchoBarra + 6;
-    const y = height - margen - alto;
+    const alto = Math.max((valor / maximo) * areaAlto, valor > 0 ? 2 : 0);
+    const centroX = margenIzquierdo + index * anchoSlot + anchoSlot / 2;
+    const x = centroX - anchoBarra / 2;
+    const y = margenSuperior + areaAlto - alto;
 
     ctx.fillStyle = "#22c55e";
-    ctx.fillRect(x, y, Math.max(anchoBarra - 12, 8), alto);
+    ctx.fillRect(x, y, anchoBarra, alto);
 
+    if (
+      index % saltoEtiqueta === 0 ||
+      index === datosGrafica.length - 1
+    ) {
+      ctx.save();
+      ctx.fillStyle = "#a1a1aa";
+      ctx.font = "10px sans-serif";
+      ctx.textAlign = datosGrafica.length > 18 ? "right" : "center";
+      if (datosGrafica.length > 18) {
+        ctx.translate(centroX + 3, height - 12);
+        ctx.rotate(-Math.PI / 4);
+        ctx.fillText(item.etiqueta, 0, 0);
+      } else {
+        ctx.fillText(item.etiqueta, centroX, height - 10);
+      }
+      ctx.restore();
+    }
+  });
+
+  if (datosGrafica.modo && datosGrafica.modo !== "dia") {
     ctx.fillStyle = "#a1a1aa";
     ctx.font = "11px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(item.fecha.slice(5), x + Math.max(anchoBarra - 12, 8) / 2, height - 10);
-  });
+    ctx.textAlign = "left";
+    ctx.fillText(`Vista agrupada por ${datosGrafica.modo}`, margenIzquierdo, 12);
+  }
 }
 
 function dibujarGraficaMetodosPago(datos) {
@@ -335,25 +369,88 @@ function dibujarGraficaTopProductos(datos) {
   }
 
   const maximo = Math.max(...datos.map((item) => Number(item.cantidad_total || 0)), 1);
-  const altoFila = Math.min(28, (height - 20) / datos.length);
+  const margenNombre = Math.min(210, Math.max(140, width * 0.34));
+  const altoFila = Math.min(30, (height - 20) / datos.length);
 
   datos.forEach((item, index) => {
     const y = 12 + index * altoFila;
     const cantidad = Number(item.cantidad_total || 0);
-    const ancho = ((width - 190) * cantidad) / maximo;
+    const anchoMaximo = Math.max(width - margenNombre - 70, 80);
+    const ancho = (anchoMaximo * cantidad) / maximo;
 
     ctx.fillStyle = "#d4d4d8";
     ctx.font = "12px sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(recortarTexto(item.nombre_producto, 22), 8, y + 15);
+    ctx.fillText(recortarTexto(item.nombre_producto, Math.floor(margenNombre / 8)), 8, y + 15);
 
     ctx.fillStyle = colores[index % colores.length];
-    ctx.fillRect(160, y, Math.max(ancho, 4), altoFila - 8);
+    ctx.fillRect(margenNombre, y, Math.max(ancho, 4), altoFila - 8);
 
     ctx.fillStyle = "#f4f4f5";
     ctx.font = "bold 12px sans-serif";
-    ctx.fillText(formatearCantidad(cantidad, item.unidad), 168 + ancho, y + 15);
+    ctx.fillText(
+      formatearCantidad(cantidad, item.unidad),
+      margenNombre + ancho + 8,
+      y + 15
+    );
   });
+}
+
+function agruparVentasParaGrafica(datos) {
+  if (datos.length <= 45) {
+    const resultado = datos.map((item) => ({
+      etiqueta: String(item.fecha || "").slice(5),
+      total: Number(item.total || 0),
+    }));
+    resultado.modo = "dia";
+    return resultado;
+  }
+
+  const modo = datos.length <= 180 ? "semana" : "mes";
+  const grupos = new Map();
+
+  datos.forEach((item) => {
+    const fecha = String(item.fecha || "");
+    const clave = modo === "semana"
+      ? obtenerClaveSemana(fecha)
+      : fecha.slice(0, 7);
+
+    const previo = grupos.get(clave) || {
+      etiqueta: modo === "semana" ? clave.replace("-", " S") : clave.slice(2),
+      total: 0,
+    };
+
+    previo.total += Number(item.total || 0);
+    grupos.set(clave, previo);
+  });
+
+  const resultado = Array.from(grupos.values());
+  resultado.modo = modo;
+  return resultado;
+}
+
+function obtenerClaveSemana(fechaTexto) {
+  const fecha = new Date(`${fechaTexto}T12:00:00`);
+
+  if (isNaN(fecha.getTime())) {
+    return fechaTexto.slice(0, 7);
+  }
+
+  const inicio = new Date(fecha.getFullYear(), 0, 1);
+  const dias = Math.floor((fecha - inicio) / 86400000);
+  const semana = Math.floor((dias + inicio.getDay()) / 7) + 1;
+
+  return `${fecha.getFullYear()}-${String(semana).padStart(2, "0")}`;
+}
+
+function formatearDineroCompacto(valor) {
+  const numero = Number(valor || 0);
+
+  if (Math.abs(numero) >= 1000) {
+    return `$${(numero / 1000).toFixed(numero >= 10000 ? 0 : 1)}k`;
+  }
+
+  return `$${numero.toFixed(0)}`;
 }
 
 function formatearDinero(valor) {
