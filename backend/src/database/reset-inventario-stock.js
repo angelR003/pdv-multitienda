@@ -107,6 +107,7 @@ async function main() {
         CURRENT_TIMESTAMP
       FROM tiendas
       CROSS JOIN productos
+      WHERE COALESCE(productos.es_derivado, 0) = 0
     `, [stockObjetivo]);
 
     await run(`
@@ -114,6 +115,12 @@ async function main() {
       SET
         cantidad_actual = ?,
         ultima_actualizacion = CURRENT_TIMESTAMP
+      WHERE EXISTS (
+        SELECT 1
+        FROM productos
+        WHERE productos.id = inventario.producto_id
+          AND COALESCE(productos.es_derivado, 0) = 0
+      )
     `, [stockObjetivo]);
 
     await run("COMMIT");
@@ -127,7 +134,13 @@ async function main() {
       FROM inventario
     `);
     const stockDistinto = await get(
-      "SELECT COUNT(*) AS total FROM inventario WHERE cantidad_actual <> ?",
+      `
+        SELECT COUNT(*) AS total
+        FROM inventario
+        INNER JOIN productos ON productos.id = inventario.producto_id
+        WHERE COALESCE(productos.es_derivado, 0) = 0
+          AND inventario.cantidad_actual <> ?
+      `,
       [stockObjetivo]
     );
 

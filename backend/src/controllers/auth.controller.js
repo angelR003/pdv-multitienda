@@ -4,6 +4,7 @@ const db = require("../database/connection");
 
 const JWT_SECRET = process.env.JWT_SECRET || "las_gardenias_secret_local";
 const TOKEN_EXPIRA_EN = "8h";
+const GRACIA_RENOVACION_MS = 12 * 60 * 60 * 1000;
 
 const login = (req, res) => {
   const { username, password, tienda_id } = req.body;
@@ -91,31 +92,86 @@ const login = (req, res) => {
 };
 
 const renovarSesion = (req, res) => {
-  const usuario = req.usuario;
+  const authHeader = req.headers.authorization;
+  const tokenActual = authHeader ? authHeader.split(" ")[1] : null;
 
-  if (!usuario) {
+  if (!tokenActual) {
+    return res.status(401).json({
+      error: "Token requerido",
+    });
+  }
+
+  let payload;
+
+  try {
+    payload = jwt.verify(tokenActual, JWT_SECRET, {
+      ignoreExpiration: true,
+    });
+  } catch (error) {
     return res.status(401).json({
       error: "Sesion invalida",
     });
   }
 
-  const token = jwt.sign(
-    {
-      id: usuario.id,
-      nombre: usuario.nombre,
-      rol: usuario.rol,
-      tienda_id: usuario.tienda_id,
-    },
-    JWT_SECRET,
-    {
-      expiresIn: TOKEN_EXPIRA_EN,
+  if (!payload?.id || !payload?.exp) {
+    return res.status(401).json({
+      error: "Sesion invalida",
+    });
+  }
+
+  const expiroHaceMs = Date.now() - payload.exp * 1000;
+
+  if (expiroHaceMs > GRACIA_RENOVACION_MS) {
+    return res.status(401).json({
+      error: "La sesion expiro hace demasiado tiempo. Inicia sesion nuevamente.",
+    });
+  }
+
+  db.get(
+    `
+    SELECT
+      id,
+      nombre,
+      rol,
+      tienda_id
+    FROM usuarios
+    WHERE id = ?
+    AND activo = 1
+    LIMIT 1
+    `,
+    [payload.id],
+    (error, usuario) => {
+      if (error) {
+        return res.status(500).json({
+          error: "Error al renovar sesion",
+        });
+      }
+
+      if (!usuario) {
+        return res.status(401).json({
+          error: "Usuario inactivo o inexistente",
+        });
+      }
+
+      const token = jwt.sign(
+        {
+          id: usuario.id,
+          nombre: usuario.nombre,
+          rol: usuario.rol,
+          tienda_id: usuario.tienda_id,
+        },
+        JWT_SECRET,
+        {
+          expiresIn: TOKEN_EXPIRA_EN,
+        }
+      );
+
+      res.json({
+        mensaje: "Sesion renovada correctamente",
+        token,
+      });
     }
   );
-
-  res.json({
-    mensaje: "Sesion renovada correctamente",
-    token,
-  });
 };
 
 module.exports = {

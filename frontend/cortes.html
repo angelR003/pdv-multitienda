@@ -53,6 +53,16 @@
           </div>
 
           <div class="divide-y divide-zinc-800">
+            <div class="flex items-center justify-between gap-4 p-5 bg-zinc-950/60">
+              <div>
+                <p class="font-black">Ventas totales del turno</p>
+                <p id="ventasTotalesConteo" class="text-sm text-zinc-500">
+                  Incluye todos los metodos de pago; no todo entra como efectivo.
+                </p>
+              </div>
+              <p id="ventasTotalesTurno" class="text-3xl font-black text-cyan-300">$0.00</p>
+            </div>
+
             <div class="flex items-center justify-between gap-4 p-5">
               <div>
                 <p class="font-black">Ventas cobradas en efectivo</p>
@@ -145,7 +155,7 @@
             id="avisoConteoCiego"
             class="hidden mt-5 rounded-2xl border border-cyan-500/40 bg-cyan-500/10 p-4 text-sm text-cyan-100"
           >
-            El corte se revisa despues de capturar el efectivo contado. Primero cuenta la caja completa; al cerrar se mostrara si hubo faltante, sobrante o si cuadro.
+            El corte se revisa despues de capturar el efectivo contado. Primero cuenta la caja completa; al cerrar se mostraran ventas totales, efectivo esperado, efectivo contado y si hubo faltante o sobrante.
           </div>
 
           <label class="block text-sm text-zinc-400 mt-6 mb-2">
@@ -200,6 +210,14 @@
 
           <div class="grid grid-cols-1 gap-3 mt-5">
             <div class="bg-zinc-950 rounded-2xl p-4">
+              <p class="text-zinc-400 text-sm">Ventas totales del turno</p>
+              <p id="ventasTotalesResultado" class="text-2xl font-black text-cyan-300 mt-1">$0.00</p>
+              <p id="ventasTotalesResultadoConteo" class="text-xs text-zinc-500 mt-1">
+                Incluye todos los metodos de pago; no todo entra como efectivo.
+              </p>
+            </div>
+
+            <div class="bg-zinc-950 rounded-2xl p-4">
               <p class="text-zinc-400 text-sm">Efectivo esperado</p>
               <p id="dineroEsperadoResultado" class="text-2xl font-black text-yellow-300 mt-1">$0.00</p>
             </div>
@@ -246,7 +264,7 @@
     </section>
   </main>
 
-  <script src="./js/session.js?v=20260607"></script>
+  <script src="./js/session.js?v=20260715"></script>
   <script src="./js/cortes.js?v=20260704"></script>
 </body>
 </html>

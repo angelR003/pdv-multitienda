@@ -1,4 +1,8 @@
 const db = require("../database/connection");
+const {
+  resolverMovimiento,
+  sumarInventario,
+} = require("../services/inventarioFisico.service");
 
 const registrarEntrada = (req, res) => {
   const {
@@ -18,92 +22,109 @@ const registrarEntrada = (req, res) => {
   }
 
   db.serialize(() => {
-    db.run("BEGIN TRANSACTION");
+    db.run("BEGIN TRANSACTION", (errorInicio) => {
+      if (errorInicio) {
+        return res.status(500).json({
+          error: "Error al iniciar la entrada",
+        });
+      }
 
-    db.run(
-      `
-      INSERT INTO entradas_mercancia (
-        tienda_id,
-        usuario_id,
-        proveedor,
-        observaciones
-      )
-      VALUES (?, ?, ?, ?)
-      `,
-      [
-        tienda_id,
-        usuario_id,
-        proveedor || null,
-        observaciones || null,
-      ],
-      function (errorEntrada) {
-        if (errorEntrada) {
-          return rollback(res, "Error al registrar entrada");
-        }
+      resolverMovimiento(
+        producto_id,
+        cantidad,
+        {},
+        (errorImpacto, impacto) => {
+          if (errorImpacto) {
+            return rollback(res, errorImpacto.message);
+          }
 
-        const entradaId = this.lastID;
-
-        db.run(
-          `
-          INSERT INTO entrada_detalles (
-            entrada_id,
-            producto_id,
-            cantidad,
-            costo_unitario
-          )
-          VALUES (?, ?, ?, ?)
-          `,
-          [
-            entradaId,
-            producto_id,
-            cantidad,
-            costo_unitario || 0,
-          ],
-          (errorDetalle) => {
-            if (errorDetalle) {
-              return rollback(res, "Error al registrar detalle de entrada");
-            }
-
-            db.run(
-              `
-              INSERT INTO inventario (
-                tienda_id,
-                producto_id,
-                cantidad_actual,
-                ultima_actualizacion
-              )
-              VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(tienda_id, producto_id)
-              DO UPDATE SET
-                cantidad_actual = cantidad_actual + excluded.cantidad_actual,
-                ultima_actualizacion = CURRENT_TIMESTAMP
-              `,
-              [
-                tienda_id,
-                producto_id,
-                cantidad,
-              ],
-              (errorInventario) => {
-                if (errorInventario) {
-                  return rollback(res, "Error al actualizar inventario");
-                }
-
-                db.run("COMMIT", (errorCommit) => {
-                  if (errorCommit) {
-                    return rollback(res, "Error al confirmar entrada");
-                  }
-
-                  res.status(201).json({
-                    mensaje: "Entrada registrada correctamente",
-                    entrada_id: entradaId,
-                  });
-                });
-              }
+          if (impacto.es_derivado) {
+            return rollback(
+              res,
+              `Registra la entrada en el producto padre ${impacto.producto_fisico_nombre}`
             );
           }
-        );
-      }
-    );
+
+          db.run(
+            `
+              INSERT INTO entradas_mercancia (
+                tienda_id,
+                usuario_id,
+                proveedor,
+                observaciones
+              )
+              VALUES (?, ?, ?, ?)
+            `,
+            [
+              tienda_id,
+              usuario_id,
+              proveedor || null,
+              observaciones || null,
+            ],
+            function (errorEntrada) {
+              if (errorEntrada) {
+                return rollback(res, "Error al registrar entrada");
+              }
+
+              const entradaId = this.lastID;
+
+              db.run(
+                `
+                  INSERT INTO entrada_detalles (
+                    entrada_id,
+                    producto_id,
+                    cantidad,
+                    costo_unitario
+                  )
+                  VALUES (?, ?, ?, ?)
+                `,
+                [
+                  entradaId,
+                  producto_id,
+                  cantidad,
+                  costo_unitario || 0,
+                ],
+                (errorDetalle) => {
+                  if (errorDetalle) {
+                    return rollback(
+                      res,
+                      "Error al registrar detalle de entrada"
+                    );
+                  }
+
+                  sumarInventario(
+                    tienda_id,
+                    impacto,
+                    (errorInventario) => {
+                      if (errorInventario) {
+                        return rollback(
+                          res,
+                          "Error al actualizar inventario"
+                        );
+                      }
+
+                      db.run("COMMIT", (errorCommit) => {
+                        if (errorCommit) {
+                          return rollback(
+                            res,
+                            "Error al confirmar entrada"
+                          );
+                        }
+
+                        res.status(201).json({
+                          mensaje: "Entrada registrada correctamente",
+                          entrada_id: entradaId,
+                        });
+                      });
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    });
   });
 };
 

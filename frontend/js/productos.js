@@ -33,6 +33,8 @@ const tipoEnvaseRetornable = document.getElementById("tipoEnvaseRetornable");
 let productoEditandoId = null;
 let productos = [];
 let tiposEnvase = [];
+let relacionDerivadaModificada = false;
+let relacionDerivadaOriginal = null;
 
 btnGuardar.addEventListener("click", async () => {
   await guardarProducto();
@@ -52,6 +54,8 @@ esRetornable.addEventListener("change", () => {
 });
 
 esDerivado.addEventListener("change", () => {
+  relacionDerivadaModificada = true;
+
   if (esDerivado.checked) {
     grupoDerivado.classList.remove("hidden");
     cargarProductosPadre();
@@ -62,7 +66,28 @@ esDerivado.addEventListener("change", () => {
   }
 });
 
+productoPadre.addEventListener("change", () => {
+  relacionDerivadaModificada = true;
+});
+
+unidadesPorPadre.addEventListener("input", () => {
+  relacionDerivadaModificada = true;
+});
+
 async function guardarProducto() {
+  const unidadesPorProductoPadre = Number(unidadesPorPadre.value);
+  const debeValidarRelacion = !productoEditandoId || relacionDerivadaModificada;
+
+  if (
+    debeValidarRelacion &&
+    esDerivado.checked &&
+    (!Number.isInteger(unidadesPorProductoPadre) ||
+      unidadesPorProductoPadre <= 0)
+  ) {
+    mostrarMensaje("Las unidades por producto padre deben ser un entero mayor a cero.");
+    return;
+  }
+
   const body = {
     tipo_producto: tipoProducto.value,
     codigo_barras: codigoBarras.value.trim() || null,
@@ -78,11 +103,21 @@ async function guardarProducto() {
     producto_padre_id: esDerivado.checked ? Number(productoPadre.value) : null,
     factor_conversion:
   esDerivado.checked
-    ? 1 / Number(unidadesPorPadre.value)
+    ? 1 / unidadesPorProductoPadre
     : 1,
     es_retornable: esRetornable.checked ? 1 : 0,
     tipo_envase_id: esRetornable.checked ? Number(tipoEnvaseRetornable.value) : null,
   };
+
+  if (productoEditandoId) {
+    body.actualizar_relacion_derivada = relacionDerivadaModificada;
+
+    if (!relacionDerivadaModificada && relacionDerivadaOriginal) {
+      body.es_derivado = relacionDerivadaOriginal.es_derivado;
+      body.producto_padre_id = relacionDerivadaOriginal.producto_padre_id;
+      body.factor_conversion = relacionDerivadaOriginal.factor_conversion;
+    }
+  }
 
   if (!body.nombre) {
     mostrarMensaje("El nombre es obligatorio.");
@@ -116,7 +151,7 @@ async function guardarProducto() {
     return;
   }
 
-  if (esDerivado.checked) {
+  if (debeValidarRelacion && esDerivado.checked) {
   if (!productoPadre.value) {
     mostrarMensaje("Selecciona el producto padre.");
     return;
@@ -173,6 +208,8 @@ async function guardarProducto() {
 }
 
 function limpiarFormulario() {
+  relacionDerivadaModificada = false;
+  relacionDerivadaOriginal = null;
   codigoBarras.value = "";
   nombre.value = "";
   categoria.value = "";
@@ -183,8 +220,13 @@ function limpiarFormulario() {
   costoCompra.value = "";
   requiereCaducidad.checked = false;
   esDerivado.checked = false;
+  esDerivado.disabled = false;
   productoPadre.value = "";
+  productoPadre.disabled = false;
   unidadesPorPadre.value = "";
+  unidadesPorPadre.disabled = false;
+  productoPadre.title = "";
+  unidadesPorPadre.title = "";
   grupoDerivado.classList.add("hidden");
   esRetornable.checked = false;
   tipoEnvaseRetornable.value = "";
@@ -298,6 +340,11 @@ async function editarProducto(id) {
     const producto = await response.json();
 
     productoEditandoId = producto.id;
+    relacionDerivadaOriginal = {
+      es_derivado: Number(producto.es_derivado || 0) === 1 ? 1 : 0,
+      producto_padre_id: producto.producto_padre_id || null,
+      factor_conversion: Number(producto.factor_conversion || 1),
+    };
 
     tipoProducto.value = producto.tipo_producto;
     codigoBarras.value = producto.codigo_barras || "";
@@ -311,6 +358,17 @@ async function editarProducto(id) {
     requiereCaducidad.checked = producto.requiere_caducidad === 1;
 
     esDerivado.checked = Number(producto.es_derivado || 0) === 1;
+    const relacionDerivadaBloqueada =
+      Number(producto.tiene_historia_inventario || 0) === 1;
+    esDerivado.disabled = relacionDerivadaBloqueada;
+    productoPadre.disabled = relacionDerivadaBloqueada;
+    unidadesPorPadre.disabled = relacionDerivadaBloqueada;
+
+    const avisoRelacion = relacionDerivadaBloqueada
+      ? "Padre y factor están bloqueados porque el producto ya tiene historial. Desactívalo y crea uno nuevo para cambiar la conversión."
+      : "";
+    productoPadre.title = avisoRelacion;
+    unidadesPorPadre.title = avisoRelacion;
 
     if (esDerivado.checked) {
       grupoDerivado.classList.remove("hidden");
@@ -324,6 +382,9 @@ async function editarProducto(id) {
       productoPadre.value = "";
       unidadesPorPadre.value = "";
     }
+
+    // La carga del formulario no representa intención de cambiar la relación.
+    relacionDerivadaModificada = false;
 
     esRetornable.checked = Number(producto.es_retornable || 0) === 1;
     tipoEnvaseRetornable.value = producto.tipo_envase_id || "";

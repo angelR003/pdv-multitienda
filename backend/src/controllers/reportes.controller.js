@@ -1,4 +1,9 @@
 const db = require("../database/connection");
+const {
+  redondearCentavos,
+  derivarEstadoCuenta,
+  agregarEstadoCuenta,
+} = require("../services/cuentaCliente.service");
 
 function normalizarFiltros(req) {
   const hoy = new Date();
@@ -349,6 +354,7 @@ async function consultarBajoInventario(filtros) {
     INNER JOIN productos p ON p.id = i.producto_id
     INNER JOIN tiendas t ON t.id = i.tienda_id
     WHERE p.activo = 1
+    AND COALESCE(p.es_derivado, 0) = 0
     AND i.cantidad_actual <= i.cantidad_minima
     ${tiendaSql}
     ORDER BY i.cantidad_actual ASC, p.nombre ASC
@@ -358,44 +364,80 @@ async function consultarBajoInventario(filtros) {
   );
 }
 
-async function consultarFiadosPendientes(filtros) {
+async function consultarCarteraClientes(filtros) {
   const params = [];
-  const condiciones = [
-    "f.concepto NOT LIKE 'Envase prestado - %'",
-  ];
+  const filtroTiendaFiados = filtros.tiendaId ? "AND f.tienda_id = ?" : "";
+  const filtroTiendaAbonos = filtros.tiendaId ? "AND a.tienda_id = ?" : "";
 
   if (filtros.tiendaId) {
-    condiciones.push("f.tienda_id = ?");
-    params.push(filtros.tiendaId);
+    // La atribución por tienda sólo es coherente si ambos lados usan la misma tienda.
+    params.push(filtros.tiendaId, filtros.tiendaId);
   }
 
-  const fiadosSql = `WHERE ${condiciones.join(" AND ")}`;
-
-  return all(
+  const rows = await all(
     `
+    WITH movimientos_cartera AS (
+      SELECT
+        f.cliente_id,
+        f.monto AS importe
+      FROM fiados f
+      WHERE f.concepto NOT LIKE 'Envase prestado - %'
+      ${filtroTiendaFiados}
+
+      UNION ALL
+
+      SELECT
+        a.cliente_id,
+        -a.monto AS importe
+      FROM abonos_fiado a
+      WHERE COALESCE(a.observaciones, '') NOT LIKE 'Recepción de envase prestado:%'
+      AND COALESCE(a.observaciones, '') NOT LIKE 'Recepcion de envase prestado:%'
+      AND COALESCE(a.observaciones, '') NOT LIKE 'Cancelacion de envase por devolucion%'
+      ${filtroTiendaAbonos}
+    )
     SELECT
       c.id,
       c.nombre_completo,
-      COALESCE(SUM(f.monto), 0)
-      -
-      COALESCE((
-        SELECT SUM(a.monto)
-        FROM abonos_fiado a
-        WHERE a.cliente_id = c.id
-        AND COALESCE(a.observaciones, '') NOT LIKE 'Recepción de envase prestado:%'
-        AND COALESCE(a.observaciones, '') NOT LIKE 'Recepcion de envase prestado:%'
-        AND COALESCE(a.observaciones, '') NOT LIKE 'Cancelacion de envase por devolucion%'
-      ), 0) AS deuda_total
+      COALESCE(SUM(m.importe), 0) AS saldo_neto
     FROM clientes_fiado c
-    INNER JOIN fiados f ON f.cliente_id = c.id
-    ${fiadosSql}
+    INNER JOIN movimientos_cartera m ON m.cliente_id = c.id
     GROUP BY c.id, c.nombre_completo
-    HAVING deuda_total > 0
-    ORDER BY deuda_total DESC
-    LIMIT 10
+    HAVING ABS(COALESCE(SUM(m.importe), 0)) >= 0.005
     `,
     params
   );
+
+  const saldos = rows.map(agregarEstadoCuenta);
+  const cuentasPorCobrar = saldos
+    .filter((item) => item.saldo_deudor > 0)
+    .sort((a, b) => b.saldo_deudor - a.saldo_deudor);
+  const saldosAFavor = saldos
+    .filter((item) => item.saldo_a_favor > 0)
+    .sort((a, b) => b.saldo_a_favor - a.saldo_a_favor);
+  const totalCuentasPorCobrar = redondearCentavos(
+    cuentasPorCobrar.reduce((total, item) => total + item.saldo_deudor, 0)
+  );
+  const totalSaldosAFavor = redondearCentavos(
+    saldosAFavor.reduce((total, item) => total + item.saldo_a_favor, 0)
+  );
+  const saldoNetoCartera = redondearCentavos(
+    totalCuentasPorCobrar - totalSaldosAFavor
+  );
+
+  return {
+    alcance: filtros.tiendaId ? "tienda" : "global",
+    tienda_id: filtros.tiendaId,
+    es_saldo_global: !filtros.tiendaId,
+    descripcion_alcance: filtros.tiendaId
+      ? "Deudas y abonos atribuidos a la tienda seleccionada; el saldo global del cliente puede ser distinto."
+      : "Saldo global actual de clientes considerando todas las tiendas.",
+    total_cuentas_por_cobrar: totalCuentasPorCobrar,
+    total_saldos_a_favor: totalSaldosAFavor,
+    saldo_neto_cartera: saldoNetoCartera,
+    estado_cartera: derivarEstadoCuenta(saldoNetoCartera).estado_cuenta,
+    cuentas_por_cobrar: cuentasPorCobrar,
+    saldos_a_favor: saldosAFavor,
+  };
 }
 
 const obtenerResumenReportes = async (req, res) => {
@@ -415,7 +457,7 @@ const obtenerResumenReportes = async (req, res) => {
       top_productos,
       promociones_usadas,
       bajo_inventario,
-      fiados_pendientes,
+      cartera,
     ] = await Promise.all([
       consultarResumen(filtros),
       consultarVentasPorDia(filtros),
@@ -423,7 +465,7 @@ const obtenerResumenReportes = async (req, res) => {
       consultarTopProductos(filtros),
       consultarPromocionesUsadas(filtros),
       consultarBajoInventario(filtros),
-      consultarFiadosPendientes(filtros),
+      consultarCarteraClientes(filtros),
     ]);
 
     res.json({
@@ -438,7 +480,11 @@ const obtenerResumenReportes = async (req, res) => {
       top_productos,
       promociones_usadas,
       bajo_inventario,
-      fiados_pendientes,
+      cartera,
+      cuentas_por_cobrar: cartera.cuentas_por_cobrar,
+      saldos_a_favor: cartera.saldos_a_favor,
+      // Alias conservado para clientes anteriores del reporte.
+      fiados_pendientes: cartera.cuentas_por_cobrar,
     });
   } catch (error) {
     console.error("Error reportes:", error.message);

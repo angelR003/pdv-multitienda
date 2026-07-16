@@ -124,7 +124,73 @@
   </div>
 </div>
 
-  <script src="./js/session.js?v=20260607"></script>
-  <script src="./js/inventario.js"></script>
+  <div
+    id="modalCantidad"
+    class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4"
+  >
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6">
+      <h2 class="text-2xl font-black mb-2">Editar existencia</h2>
+
+      <p id="cantidadProducto" class="text-zinc-400 mb-1"></p>
+      <p id="cantidadActualTexto" class="text-sm text-zinc-500 mb-5"></p>
+
+      <label class="block text-sm text-zinc-400 mb-2" for="cantidadNueva">
+        Nueva cantidad
+      </label>
+
+      <div class="flex gap-2 mb-3">
+        <button
+          type="button"
+          id="btnRestarCantidad"
+          class="bg-zinc-800 hover:bg-zinc-700 rounded-xl px-5 text-2xl font-black"
+          aria-label="Restar una unidad"
+        >−</button>
+        <input
+          id="cantidadNueva"
+          type="number"
+          min="0"
+          step="0.001"
+          class="min-w-0 flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3"
+        />
+        <button
+          type="button"
+          id="btnSumarCantidad"
+          class="bg-zinc-800 hover:bg-zinc-700 rounded-xl px-5 text-2xl font-black"
+          aria-label="Sumar una unidad"
+        >+</button>
+      </div>
+
+      <p id="diferenciaCantidad" class="text-sm font-bold mb-4"></p>
+
+      <label class="block text-sm text-zinc-400 mb-2" for="motivoCantidad">
+        Motivo del ajuste
+      </label>
+      <input
+        id="motivoCantidad"
+        type="text"
+        maxlength="120"
+        class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 mb-5"
+        placeholder="Ejemplo: conteo físico"
+      />
+
+      <p id="mensajeCantidad" class="hidden text-sm text-red-400 mb-4"></p>
+
+      <div class="flex gap-3">
+        <button
+          type="button"
+          id="btnGuardarCantidad"
+          class="flex-1 bg-orange-500 hover:bg-orange-400 text-black font-black rounded-xl py-3"
+        >Guardar existencia</button>
+        <button
+          type="button"
+          id="btnCerrarCantidad"
+          class="flex-1 bg-zinc-800 hover:bg-zinc-700 rounded-xl py-3"
+        >Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/session.js?v=20260715"></script>
+  <script src="./js/inventario.js?v=20260715"></script>
 </body>
 </html>

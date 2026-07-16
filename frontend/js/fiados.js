@@ -48,6 +48,8 @@ const btnGuardarEditarCliente = document.getElementById("btnGuardarEditarCliente
 let clienteSeleccionado = null;
 let clientes = [];
 let edicionClienteEnProceso = false;
+const CLAVE_OPERACION_ABONO = "fiados.operation_id_pendiente";
+let operacionAbonoEnMemoria = null;
 
 btnCrearCliente.addEventListener("click", crearCliente);
 btnRegistrarFiado.addEventListener("click", registrarFiado);
@@ -58,6 +60,68 @@ btnCancelarEditarCliente?.addEventListener("click", cerrarModalEditarCliente);
 btnGuardarEditarCliente?.addEventListener("click", guardarEdicionCliente);
 
 cargarClientes();
+
+function obtenerEstadoCuenta(cliente = {}) {
+  const saldoNetoCalculado = Number(
+    cliente.saldo_neto ?? cliente.deuda_total ?? 0
+  );
+  const saldoNeto = Number.isFinite(saldoNetoCalculado)
+    ? Math.round(saldoNetoCalculado * 100) / 100
+    : 0;
+  const saldoDeudor = Math.max(
+    0,
+    Number(cliente.saldo_deudor ?? (saldoNeto > 0 ? saldoNeto : 0)) || 0
+  );
+  const saldoAFavor = Math.max(
+    0,
+    Number(cliente.saldo_a_favor ?? (saldoNeto < 0 ? -saldoNeto : 0)) || 0
+  );
+
+  return {
+    saldo_neto: saldoNeto,
+    saldo_deudor: saldoDeudor,
+    saldo_a_favor: saldoAFavor,
+    estado_cuenta:
+      cliente.estado_cuenta ||
+      (saldoDeudor > 0
+        ? "debe"
+        : saldoAFavor > 0
+          ? "a_favor"
+          : "saldado"),
+  };
+}
+
+function obtenerPresentacionSaldo(cliente) {
+  const estado = obtenerEstadoCuenta(cliente);
+
+  if (estado.saldo_a_favor > 0) {
+    return {
+      ...estado,
+      etiqueta: "Saldo a favor",
+      monto_visible: estado.saldo_a_favor,
+      texto_visible: `Saldo a favor: $${estado.saldo_a_favor.toFixed(2)}`,
+      clase_monto: "text-green-300",
+    };
+  }
+
+  if (estado.saldo_deudor > 0) {
+    return {
+      ...estado,
+      etiqueta: "Debe",
+      monto_visible: estado.saldo_deudor,
+      texto_visible: `Debe: $${estado.saldo_deudor.toFixed(2)}`,
+      clase_monto: "text-red-300",
+    };
+  }
+
+  return {
+    ...estado,
+    etiqueta: "Sin saldo pendiente",
+    monto_visible: 0,
+    texto_visible: "Sin saldo pendiente",
+    clase_monto: "text-zinc-300",
+  };
+}
 
 async function cargarClientes() {
   try {
@@ -71,21 +135,21 @@ async function cargarClientes() {
     contenedorClientes.innerHTML = "";
 
     clientes.forEach((cliente) => {
-      const deuda = Number(cliente.deuda_total || 0);
+      const saldo = obtenerPresentacionSaldo(cliente);
       const envasesPendientes = Number(cliente.envases_pendientes || 0);
       const envasesHistorial = Number(cliente.envases_historial || 0);
       const limite = Number(cliente.limite_credito || 0);
-      const restante = limite - deuda;
+      const restante = limite - saldo.saldo_neto;
 
       let borde = "border-green-500/40";
-      let estado = "SANO";
+      let estado = saldo.saldo_a_favor > 0 ? "SALDO A FAVOR" : "SANO";
 
       if (envasesPendientes > 0 || envasesHistorial > 0) {
         borde = "border-yellow-400";
         estado = "ENVASES";
       }
 
-      if (limite > 0 && deuda >= limite) {
+      if (limite > 0 && saldo.saldo_deudor >= limite) {
         borde = "border-red-500";
         estado = "LIMITE EXCEDIDO";
       } else if (limite > 0 && restante <= 100) {
@@ -102,8 +166,7 @@ async function cargarClientes() {
         <p class="text-zinc-400">${cliente.apodo || "Sin apodo"}</p>
 
         <div class="mt-5">
-          <p class="text-zinc-400 text-sm">Debe dinero</p>
-          <p class="text-3xl font-black text-red-300">$${deuda.toFixed(2)}</p>
+          <p class="text-3xl font-black ${saldo.clase_monto}">${saldo.texto_visible}</p>
         </div>
 
         ${
@@ -175,7 +238,7 @@ async function crearCliente() {
 function seleccionarCliente(cliente) {
   clienteSeleccionado = cliente;
 
-  const deuda = Number(cliente.deuda_total || 0);
+  const saldo = obtenerPresentacionSaldo(cliente);
   const envasesPendientes = Number(cliente.envases_pendientes || 0);
   const limite = Number(cliente.limite_credito || 0);
 
@@ -183,7 +246,7 @@ function seleccionarCliente(cliente) {
   detalleTitulo.textContent = cliente.nombre_completo;
 
   detalleInfo.textContent =
-    `Debe dinero $${deuda.toFixed(2)} de limite $${limite.toFixed(2)}. Envases pendientes: ${envasesPendientes}. Tel: ${cliente.telefono || "-"}`;
+    `${saldo.texto_visible}. Límite: $${limite.toFixed(2)}. Envases pendientes: ${envasesPendientes}. Tel: ${cliente.telefono || "-"}`;
 
   cargarHistorial(cliente.id);
 }
@@ -329,7 +392,7 @@ async function cargarHistorial(clienteId) {
         </td>
 
         <td class="p-3 font-black ${esEnvase ? "text-zinc-500" : esAbono ? "text-green-400" : "text-red-400"}">
-          ${esEnvase ? "No monetario" : `${esAbono ? "-" : "+"}$${Number(item.monto).toFixed(2)}`}
+          ${esEnvase ? "No monetario" : `$${Math.abs(Number(item.monto || 0)).toFixed(2)}`}
         </td>
 
         <td class="p-3 text-zinc-400">
@@ -370,7 +433,7 @@ async function registrarFiado() {
     return;
   }
 
-  const deudaActual = Number(clienteSeleccionado.deuda_total || 0);
+  const deudaActual = obtenerEstadoCuenta(clienteSeleccionado).saldo_neto;
   const limite = Number(clienteSeleccionado.limite_credito || 0);
 
   if (limite > 0 && deudaActual + monto > limite && usuario.rol !== "administrador") {
@@ -427,7 +490,16 @@ async function registrarAbono() {
     return;
   }
 
-  try {
+  const payloadLogico = {
+    cliente_id: Number(clienteSeleccionado.id),
+    usuario_id: Number(usuario.id),
+    tienda_id: tiendaId,
+    monto,
+    observaciones: observacionesAbono.value.trim(),
+  };
+  const operationId = obtenerOperationIdAbono(payloadLogico);
+
+  const enviarAbono = async (confirmarSaldoAFavor = false) => {
     const response = await fetch(`${API_URL}/fiados/abono`, {
       method: "POST",
       headers: {
@@ -440,10 +512,44 @@ async function registrarAbono() {
         tienda_id: tiendaId,
         monto,
         observaciones: observacionesAbono.value.trim(),
+        confirmar_saldo_a_favor: confirmarSaldoAFavor,
+        operation_id: operationId,
       }),
     });
 
-    const data = await response.json();
+    return {
+      response,
+      data: await response.json(),
+    };
+  };
+
+  try {
+    btnRegistrarAbono.disabled = true;
+
+    let { response, data } = await enviarAbono(false);
+
+    if (
+      response.status === 409 &&
+      data.codigo === "CONFIRMACION_SALDO_A_FAVOR_REQUERIDA"
+    ) {
+      const saldoAFavorResultante = Math.max(
+        0,
+        Number(data.saldo_resultante?.saldo_a_favor || 0)
+      );
+      const continuar = confirm(
+        `Este abono generará un saldo a favor de $${saldoAFavorResultante.toFixed(2)} para ${clienteSeleccionado.nombre_completo}.\n\n` +
+          "Ese crédito se consumirá automáticamente en sus siguientes deudas o ventas fiadas.\n\n" +
+          "¿Deseas registrar el abono?"
+      );
+
+      if (!continuar) {
+        limpiarOperationIdAbono();
+        mostrarMensaje("Abono cancelado. No se registraron movimientos.");
+        return;
+      }
+
+      ({ response, data } = await enviarAbono(true));
+    }
 
     if (!response.ok) {
       mostrarMensaje(data.error || "Error al registrar abono.");
@@ -452,14 +558,78 @@ async function registrarAbono() {
 
     montoAbono.value = "";
     observacionesAbono.value = "";
+    limpiarOperationIdAbono();
 
-    mostrarMensaje("Abono registrado.");
+    if (Number(data.saldo_a_favor || 0) > 0) {
+      mostrarMensaje(
+        `Abono registrado. Saldo a favor: $${Number(data.saldo_a_favor).toFixed(2)}.`
+      );
+    } else if (Number(data.saldo_deudor || 0) > 0) {
+      mostrarMensaje(
+        `Abono registrado. Saldo pendiente: $${Number(data.saldo_deudor).toFixed(2)}.`
+      );
+    } else {
+      mostrarMensaje("Abono registrado. La cuenta quedó sin saldo pendiente.");
+    }
+
     await cargarClientes();
 
     const actualizado = clientes.find((c) => c.id === clienteSeleccionado.id);
     if (actualizado) seleccionarCliente(actualizado);
   } catch (error) {
     mostrarMensaje("Error al conectar.");
+  } finally {
+    btnRegistrarAbono.disabled = false;
+  }
+}
+
+function crearOperationIdAbono() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `abono-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function obtenerOperationIdAbono(payload) {
+  const huella = JSON.stringify(payload);
+  let operacionGuardada = operacionAbonoEnMemoria;
+
+  try {
+    operacionGuardada = JSON.parse(
+      sessionStorage.getItem(CLAVE_OPERACION_ABONO) || "null"
+    );
+  } catch (error) {
+    operacionGuardada = operacionAbonoEnMemoria;
+  }
+
+  if (operacionGuardada?.huella === huella && operacionGuardada.operation_id) {
+    operacionAbonoEnMemoria = operacionGuardada;
+    return operacionGuardada.operation_id;
+  }
+
+  const nuevaOperacion = {
+    huella,
+    operation_id: crearOperationIdAbono(),
+  };
+  operacionAbonoEnMemoria = nuevaOperacion;
+
+  try {
+    sessionStorage.setItem(CLAVE_OPERACION_ABONO, JSON.stringify(nuevaOperacion));
+  } catch (error) {
+    // El respaldo en memoria mantiene la clave durante la sesion actual.
+  }
+
+  return nuevaOperacion.operation_id;
+}
+
+function limpiarOperationIdAbono() {
+  operacionAbonoEnMemoria = null;
+
+  try {
+    sessionStorage.removeItem(CLAVE_OPERACION_ABONO);
+  } catch (error) {
+    // No hay estado persistente que limpiar.
   }
 }
 

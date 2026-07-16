@@ -110,6 +110,7 @@ async function main() {
       CROSS JOIN productos
       WHERE COALESCE(tiendas.activa, 1) = 1
         AND COALESCE(productos.activo, 1) = 1
+        AND COALESCE(productos.es_derivado, 0) = 0
     `, [stockInicial]);
 
     await run("COMMIT");

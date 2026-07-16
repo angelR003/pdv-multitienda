@@ -37,6 +37,27 @@ const calcularResumenCorte = (tiendaId, callback) => {
     db.get(
       `
       SELECT
+        COUNT(*) AS total_operaciones,
+        COALESCE(SUM(v.total), 0) AS total
+      FROM ventas v
+      WHERE v.tienda_id = ?
+      AND v.fecha_venta > ?
+      AND v.estado IN ('completada', 'devuelta_parcial', 'devuelta_total')
+      `,
+      [tiendaId, fechaUltimoCorte],
+      (errorVentasTotales, ventasTotalesData) => {
+        if (errorVentasTotales) {
+          callback({
+            status: 500,
+            error: "Error al calcular ventas totales",
+            detalle: errorVentasTotales.message,
+          });
+          return;
+        }
+
+    db.get(
+      `
+      SELECT
         COALESCE(SUM(monto), 0) AS total_efectivo_bruto,
         COUNT(*) AS total_operaciones
       FROM (
@@ -193,6 +214,10 @@ const calcularResumenCorte = (tiendaId, callback) => {
 
                         callback(null, {
                           desde: fechaUltimoCorte,
+                          ventas_totales_brutas: redondear(ventasTotalesData.total),
+                          ventas_totales_operaciones: Number(
+                            ventasTotalesData.total_operaciones || 0
+                          ),
                           ventas_efectivo_brutas: totalEfectivoBruto,
                           ventas_efectivo: totalEfectivo,
                           ventas_efectivo_operaciones: Number(
@@ -216,6 +241,8 @@ const calcularResumenCorte = (tiendaId, callback) => {
             );
           }
         );
+      }
+    );
       }
     );
   });

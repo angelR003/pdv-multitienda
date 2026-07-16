@@ -1,4 +1,8 @@
 const db = require("../database/connection");
+const {
+  resolverMovimiento,
+  sumarInventario,
+} = require("../services/inventarioFisico.service");
 
 const asegurarColumnaServicioDevolucion = (callback) => {
   db.all("PRAGMA table_info(devolucion_detalles)", [], (error, columnas) => {
@@ -198,164 +202,281 @@ const cancelarEnvasesPendientesPorDevolucion = (
 };
 
 const registrarDevolucion = (req, res) => {
-  const {
-    venta_id,
-    tienda_id,
-    usuario_id,
-    motivo,
-  } = req.body;
+  const { venta_id, motivo } = req.body;
+  const ventaId = Number(venta_id);
+  const usuarioId = Number(req.usuario?.id);
+  const motivoLimpio = String(motivo || "").trim();
 
-  if (
-    !venta_id ||
-    !tienda_id ||
-    !usuario_id ||
-    !motivo
-  ) {
-    return res.status(400).json({
-      error: "Datos incompletos",
-    });
+  if (!Number.isInteger(ventaId) || ventaId <= 0 || !usuarioId || !motivoLimpio) {
+    return res.status(400).json({ error: "Datos incompletos" });
   }
 
-  const queryVenta = `
-    SELECT *
-    FROM ventas
-    WHERE id = ?
-  `;
-
-  db.get(queryVenta, [venta_id], (errorVenta, venta) => {
-    if (errorVenta) {
-      return res.status(500).json({
-        error: "Error al obtener venta",
-      });
-    }
-
-    if (!venta) {
-      return res.status(404).json({
-        error: "Venta no encontrada",
-      });
-    }
-
-    if (venta.estado === "devuelta_total") {
-      return res.status(400).json({
-        error: "La venta ya fue devuelta",
-      });
-    }
-
-    const queryDetalles = `
-      SELECT *
-      FROM venta_detalles
-      WHERE venta_id = ?
-    `;
-
-    db.all(queryDetalles, [venta_id], (errorDetalles, detalles) => {
-      if (errorDetalles) {
-        return res.status(500).json({
-          error: "Error al obtener detalles",
+  db.serialize(() => {
+    db.run("BEGIN IMMEDIATE TRANSACTION", (errorInicio) => {
+      if (errorInicio) {
+        return res.status(409).json({
+          error: "Hay otra devolucion en proceso. Intenta de nuevo.",
         });
       }
 
-      const actualizarInventario = detalles.map((detalle) => {
-        return new Promise((resolve, reject) => {
-          const queryUpdate = `
-            UPDATE inventario
-            SET cantidad_actual = cantidad_actual + ?
-            WHERE tienda_id = ?
-            AND producto_id = ?
-          `;
-
-          db.run(
-            queryUpdate,
-            [
-              detalle.cantidad,
-              tienda_id,
-              detalle.producto_id,
-            ],
-            (errorUpdate) => {
-              if (errorUpdate) {
-                reject(errorUpdate);
-              } else {
-                resolve();
-              }
-            }
-          );
+      const cancelar = (status, error, detalle = null) => {
+        db.run("ROLLBACK", () => {
+          res.status(status).json({
+            error,
+            ...(detalle ? { detalle } : {}),
+          });
         });
-      });
+      };
 
-      Promise.all(actualizarInventario)
-        .then(() => {
-          const queryEstado = `
-            UPDATE ventas
-            SET estado = 'devuelta_total'
-            WHERE id = ?
-          `;
+      db.get("SELECT * FROM ventas WHERE id = ?", [ventaId], (errorVenta, venta) => {
+        if (errorVenta) return cancelar(500, "Error al obtener venta");
+        if (!venta) return cancelar(404, "Venta no encontrada");
 
-          db.run(queryEstado, [venta_id], (errorEstado) => {
-            if (errorEstado) {
-              return res.status(500).json({
-                error: "Error al actualizar venta",
-              });
-            }
+        if (
+          req.usuario?.rol !== "administrador" &&
+          Number(req.usuario?.tienda_id) !== Number(venta.tienda_id)
+        ) {
+          return cancelar(403, "No tienes acceso a esta venta");
+        }
 
-            const queryDevolucion = `
-              INSERT INTO devoluciones (
-                venta_id,
-                tienda_id,
-                usuario_id,
-                motivo,
-                total_devuelto
-              )
-              VALUES (?, ?, ?, ?, ?)
-            `;
+        if (venta.estado === "devuelta_total") {
+          return cancelar(409, "La venta ya fue devuelta completamente");
+        }
 
-            db.run(
-              queryDevolucion,
-              [
-                venta_id,
-                tienda_id,
-                usuario_id,
-                motivo,
-                venta.total,
-              ],
-              function (errorDevolucion) {
-                if (errorDevolucion) {
-                  return res.status(500).json({
-                    error: errorDevolucion.message,
-                  });
+        db.all(
+          "SELECT * FROM venta_detalles WHERE venta_id = ? ORDER BY id ASC",
+          [ventaId],
+          (errorDetalles, detallesVendidos) => {
+            if (errorDetalles) return cancelar(500, "Error al obtener detalles");
+
+            db.all(
+              `
+                SELECT
+                  dd.producto_id,
+                  COALESCE(SUM(dd.cantidad), 0) AS cantidad_devuelta
+                FROM devolucion_detalles dd
+                INNER JOIN devoluciones d ON d.id = dd.devolucion_id
+                WHERE d.venta_id = ? AND dd.servicio_id IS NULL
+                GROUP BY dd.producto_id
+              `,
+              [ventaId],
+              (errorPrevias, devolucionesPrevias) => {
+                if (errorPrevias) {
+                  return cancelar(500, "Error al calcular devoluciones previas");
                 }
 
-                const devolucionId = this.lastID;
+                const devueltoPendientePorProducto = new Map(
+                  devolucionesPrevias.map((fila) => [
+                    Number(fila.producto_id),
+                    Number(fila.cantidad_devuelta || 0),
+                  ])
+                );
+                const detallesRemanentes = [];
 
-                cancelarEnvasesPendientesPorDevolucion(
-                  {
-                    venta,
-                    tiendaId: tienda_id,
-                    usuarioId: usuario_id,
-                    detalles,
-                  },
-                  (errorEnvases) => {
-                    if (errorEnvases) {
-                      return res.status(500).json({
-                        error: "Error al cancelar envases pendientes",
-                        detalle: errorEnvases.message,
-                      });
+                detallesVendidos.forEach((detalle) => {
+                  const productoId = Number(detalle.producto_id);
+                  const cantidadVendida = Number(detalle.cantidad || 0);
+                  const devueltoSinAsignar = Number(
+                    devueltoPendientePorProducto.get(productoId) || 0
+                  );
+                  const aplicadoPreviamente = Math.min(
+                    cantidadVendida,
+                    devueltoSinAsignar
+                  );
+                  const cantidadRemanente = Number(
+                    (cantidadVendida - aplicadoPreviamente).toFixed(9)
+                  );
+
+                  devueltoPendientePorProducto.set(
+                    productoId,
+                    Number((devueltoSinAsignar - aplicadoPreviamente).toFixed(9))
+                  );
+
+                  if (cantidadRemanente > 0) {
+                    const precio = Number(
+                      detalle.precio_unitario_final ?? detalle.precio_unitario ?? 0
+                    );
+                    detallesRemanentes.push({
+                      ...detalle,
+                      cantidad: cantidadRemanente,
+                      monto_devuelto: Number(
+                        (cantidadRemanente * precio).toFixed(2)
+                      ),
+                    });
+                  }
+                });
+
+                if (detallesRemanentes.length === 0) {
+                  return cancelar(
+                    409,
+                    "La venta no tiene productos pendientes de devolver"
+                  );
+                }
+
+                const totalDevuelto = Number(
+                  detallesRemanentes
+                    .reduce((total, detalle) => total + detalle.monto_devuelto, 0)
+                    .toFixed(2)
+                );
+
+                db.run(
+                  `
+                    INSERT INTO devoluciones (
+                      venta_id, tienda_id, usuario_id, motivo, total_devuelto
+                    ) VALUES (?, ?, ?, ?, ?)
+                  `,
+                  [
+                    ventaId,
+                    venta.tienda_id,
+                    usuarioId,
+                    motivoLimpio,
+                    totalDevuelto,
+                  ],
+                  function (errorDevolucion) {
+                    if (errorDevolucion) {
+                      return cancelar(
+                        500,
+                        "Error al registrar devolucion",
+                        errorDevolucion.message
+                      );
                     }
 
-                    res.status(201).json({
-                      mensaje: "Devolución realizada correctamente",
-                      devolucion_id: devolucionId,
-                      total_devuelto: venta.total,
-                    });
+                    const devolucionId = this.lastID;
+
+                    const procesarDetalle = (index) => {
+                      if (index >= detallesRemanentes.length) {
+                        db.run(
+                          `
+                            UPDATE ventas
+                            SET estado = 'devuelta_total'
+                            WHERE id = ? AND estado <> 'devuelta_total'
+                          `,
+                          [ventaId],
+                          function (errorEstado) {
+                            if (errorEstado) {
+                              return cancelar(
+                                500,
+                                "Error al actualizar venta",
+                                errorEstado.message
+                              );
+                            }
+
+                            if (this.changes !== 1) {
+                              return cancelar(
+                                409,
+                                "La venta ya fue devuelta completamente"
+                              );
+                            }
+
+                            cancelarEnvasesPendientesPorDevolucion(
+                              {
+                                venta,
+                                tiendaId: venta.tienda_id,
+                                usuarioId,
+                                detalles: detallesRemanentes,
+                              },
+                              (errorEnvases) => {
+                                if (errorEnvases) {
+                                  return cancelar(
+                                    500,
+                                    "Error al cancelar envases pendientes",
+                                    errorEnvases.message
+                                  );
+                                }
+
+                                db.run("COMMIT", (errorCommit) => {
+                                  if (errorCommit) {
+                                    return cancelar(
+                                      500,
+                                      "Error al confirmar devolucion",
+                                      errorCommit.message
+                                    );
+                                  }
+
+                                  res.status(201).json({
+                                    mensaje: "Devolucion realizada correctamente",
+                                    devolucion_id: devolucionId,
+                                    total_devuelto: totalDevuelto,
+                                    tienda_id: Number(venta.tienda_id),
+                                    detalles_creados: detallesRemanentes.length,
+                                  });
+                                });
+                              }
+                            );
+                          }
+                        );
+                        return;
+                      }
+
+                      const detalle = detallesRemanentes[index];
+
+                      db.run(
+                        `
+                          INSERT INTO devolucion_detalles (
+                            devolucion_id,
+                            producto_id,
+                            cantidad,
+                            estado_producto,
+                            monto_devuelto
+                          ) VALUES (?, ?, ?, 'regresa_inventario', ?)
+                        `,
+                        [
+                          devolucionId,
+                          detalle.producto_id,
+                          detalle.cantidad,
+                          detalle.monto_devuelto,
+                        ],
+                        (errorDetalle) => {
+                          if (errorDetalle) {
+                            return cancelar(
+                              500,
+                              "Error al registrar detalle de devolucion",
+                              errorDetalle.message
+                            );
+                          }
+
+                          resolverMovimiento(
+                            detalle.producto_id,
+                            detalle.cantidad,
+                            { permitirInactivo: true },
+                            (errorImpacto, impacto) => {
+                              if (errorImpacto) {
+                                return cancelar(
+                                  errorImpacto.status || 500,
+                                  "Error al resolver inventario fisico",
+                                  errorImpacto.message
+                                );
+                              }
+
+                              sumarInventario(
+                                venta.tienda_id,
+                                impacto,
+                                (errorInventario) => {
+                                  if (errorInventario) {
+                                    return cancelar(
+                                      500,
+                                      "Error al regresar inventario",
+                                      errorInventario.message
+                                    );
+                                  }
+
+                                  procesarDetalle(index + 1);
+                                }
+                              );
+                            }
+                          );
+                        }
+                      );
+                    };
+
+                    procesarDetalle(0);
                   }
                 );
               }
             );
-          });
-        })
-        .catch(() => {
-          return res.status(500).json({
-            error: "Error al actualizar inventario",
-          });
-        });
+          }
+        );
+      });
     });
   });
 };
@@ -590,26 +711,30 @@ const registrarDevolucionRenglon = (req, res) => {
                       });
                     }
 
-                    db.run(
-                      `
-                      UPDATE inventario
-                      SET cantidad_actual = cantidad_actual + ?
-                      WHERE tienda_id = ?
-                      AND producto_id = ?
-                      `,
-                      [
-                        cantidadDevuelta,
-                        tienda_id,
-                        producto_id,
-                      ],
-                      (errorInventario) => {
-                        if (errorInventario) {
+                    resolverMovimiento(
+                      producto_id,
+                      cantidadDevuelta,
+                      { permitirInactivo: true },
+                      (errorImpacto, impacto) => {
+                        if (errorImpacto) {
                           db.run("ROLLBACK");
                           return res.status(500).json({
-                            error: "Error al regresar inventario",
-                            detalle: errorInventario.message,
+                            error: "Error al resolver inventario fisico",
+                            detalle: errorImpacto.message,
                           });
                         }
+
+                        sumarInventario(
+                          tienda_id,
+                          impacto,
+                          (errorInventario) => {
+                            if (errorInventario) {
+                              db.run("ROLLBACK");
+                              return res.status(500).json({
+                                error: "Error al regresar inventario",
+                                detalle: errorInventario.message,
+                              });
+                            }
 
 actualizarEstadoVentaPorDevolucion(
   venta_id,
@@ -663,6 +788,8 @@ actualizarEstadoVentaPorDevolucion(
     );
   }
 );
+                          }
+                        );
                       }
                     );
                   }

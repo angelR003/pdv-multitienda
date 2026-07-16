@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
+    "test": "node --test test/inventario-fiados.regression.test.js test/migracion-operaciones-abono-fiado.test.js",
     "dev": "nodemon src/app.js",
     "start": "node src/app.js",
     "seed": "node src/database/seed-db.js",

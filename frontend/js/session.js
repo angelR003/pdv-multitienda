@@ -129,6 +129,9 @@
     }
 
     try {
+      clearTimeout(timerAviso);
+      clearTimeout(timerExpiracion);
+
       const response = await window.__fetchOriginal(`${API_BASE}/auth/renovar`, {
         method: "POST",
         headers: {
@@ -145,6 +148,7 @@
 
       localStorage.setItem("token", data.token);
       avisoMostrado = false;
+      sesionBloqueada = false;
       quitarOverlay();
       programarAvisos();
     } catch (error) {
@@ -211,8 +215,24 @@
 
   window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
   window.fetch = async (...args) => {
-    const response = await window.__fetchOriginal(...args);
     const url = String(args[0]?.url || args[0] || "");
+    const usaApiLocal = url.includes("/api/") || url.startsWith(API_BASE);
+    const esLogin = url.includes("/auth/login");
+    const tokenActual = localStorage.getItem("token");
+
+    if (usaApiLocal && !esLogin && tokenActual) {
+      const opcionesOriginales = args[1] || {};
+      const headers = new Headers(opcionesOriginales.headers || {});
+
+      headers.set("Authorization", `Bearer ${tokenActual}`);
+
+      args[1] = {
+        ...opcionesOriginales,
+        headers,
+      };
+    }
+
+    const response = await window.__fetchOriginal(...args);
 
     if (
       response.status === 401 &&

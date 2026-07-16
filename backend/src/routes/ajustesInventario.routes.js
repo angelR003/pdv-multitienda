@@ -9,10 +9,14 @@ const {
   verificarToken,
 } = require("../middlewares/auth.middleware");
 
+const {
+  permitirRoles,
+} = require("../middlewares/roles.middleware");
+
 const router = express.Router();
 
-router.get("/", verificarToken, obtenerAjustesInventario);
+router.get("/", verificarToken, permitirRoles("administrador"), obtenerAjustesInventario);
 
-router.post("/", verificarToken, registrarAjusteInventario);
+router.post("/", verificarToken, permitirRoles("administrador"), registrarAjusteInventario);
 
 module.exports = router;

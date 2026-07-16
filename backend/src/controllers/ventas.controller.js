@@ -4,6 +4,11 @@ const {
   esProductoAGranel,
 } = require("../../../frontend/js/redondeo-operativo");
 const { calcularImporteEnvase } = require("../utils/importes-envases");
+const {
+  descontarInventario,
+  resolverImpactoInventario,
+  tieneInventarioSuficiente,
+} = require("../services/inventarioFisico.service");
 
 const calcularPromocionProducto = (cantidad, precioNormal, promociones = []) => {
   const cantidadNumero = Number(cantidad);
@@ -507,10 +512,16 @@ const crearVenta = (req, res) => {
 
       db.get(
         `
-        SELECT 
+SELECT
   p.*,
+  padre.id AS padre_existente_id,
+  padre.es_derivado AS padre_es_derivado,
+  padre.nombre AS producto_fisico_nombre,
+  padre.unidad AS unidad_fisica,
   COALESCE(pt.precio_especial, p.precio_global) AS precio_aplicable
 FROM productos p
+LEFT JOIN productos padre
+  ON padre.id = p.producto_padre_id
 LEFT JOIN precios_tienda pt
   ON pt.producto_id = p.id
   AND pt.tienda_id = ?
@@ -543,6 +554,21 @@ LIMIT 1
             return rollback(
               res,
               `La cantidad de ${producto.nombre} debe ser una pieza completa`
+            );
+          }
+
+          let impactoInventario;
+
+          try {
+            impactoInventario = resolverImpactoInventario(
+              producto,
+              cantidadVenta
+            );
+          } catch (errorImpacto) {
+            return rollback(
+              res,
+              errorImpacto.message ||
+                `Configuración de inventario inválida para ${producto.nombre}`
             );
           }
 
@@ -605,22 +631,18 @@ AND producto_id = ?
 `,
             [
               tienda_id,
-              Number(producto.es_derivado) === 1
-                ? producto.producto_padre_id
-                : producto_id,
+              impactoInventario.producto_fisico_id,
             ],
             (errorInventario, inventario) => {
               if (errorInventario)
                 return rollback(res, "Error al consultar inventario");
 
-              const cantidadInventario =
-                Number(producto.es_derivado) === 1
-                  ? Number(cantidad) * Number(producto.factor_conversion)
-                  : Number(cantidad);
-
               if (
                 !inventario ||
-                inventario.cantidad_actual < cantidadInventario
+                !tieneInventarioSuficiente(
+                  inventario.cantidad_actual,
+                  impactoInventario.cantidad_fisica
+                )
               ) {
                 return rollback(
                   res,
@@ -673,18 +695,13 @@ db.all(
 
     detalles.push({
       producto_id: producto.id,
-      producto_inventario_id:
-        Number(producto.es_derivado) === 1
-          ? producto.producto_padre_id
-          : producto.id,
-      cantidad_inventario:
-        Number(producto.es_derivado) === 1
-          ? Number(cantidad) * Number(producto.factor_conversion)
-          : Number(cantidad),
+      producto_inventario_id: impactoInventario.producto_fisico_id,
+      cantidad_inventario: impactoInventario.cantidad_fisica,
+      factor_inventario_aplicado: impactoInventario.factor_aplicado,
       codigo_barras: producto.codigo_barras,
       nombre_producto: producto.nombre,
       tipo_producto: producto.tipo_producto,
-      cantidad,
+      cantidad: impactoInventario.cantidad_comercial,
       unidad: producto.unidad,
 
       precio_unitario: resultadoPrecio.precioUnitarioFinal,
@@ -750,7 +767,10 @@ db.all(
 
             if (
               !inventario ||
-              Number(inventario.cantidad_actual) < Number(requerido.cantidad)
+              !tieneInventarioSuficiente(
+                inventario.cantidad_actual,
+                requerido.cantidad
+              )
             ) {
               return rollback(
                 res,
@@ -944,34 +964,24 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         (error) => {
           if (error) return rollback(res, "Error al guardar detalle de venta");
 
-          db.run(
-            `
-            UPDATE inventario
-SET cantidad_actual = cantidad_actual - ?,
-    ultima_actualizacion = CURRENT_TIMESTAMP
-WHERE tienda_id = ?
-AND producto_id = ?
-AND cantidad_actual >= ?
-`,
-            [
-              detalle.cantidad_inventario,
-              tienda_id,
-              detalle.producto_inventario_id,
-              detalle.cantidad_inventario,
-            ],
-            function (errorInventario) {
-              if (errorInventario)
-                return rollback(res, "Error al descontar inventario");
-
-              if (this.changes === 0) {
+          descontarInventario(
+            tienda_id,
+            {
+              producto_fisico_id: detalle.producto_inventario_id,
+              cantidad_fisica: detalle.cantidad_inventario,
+            },
+            (errorInventario) => {
+              if (errorInventario) {
                 return rollback(
                   res,
-                  `Inventario insuficiente para ${detalle.nombre_producto}`
+                  errorInventario.codigo === "INVENTARIO_INSUFICIENTE"
+                    ? `Inventario insuficiente para ${detalle.nombre_producto}`
+                    : "Error al descontar inventario"
                 );
               }
 
               guardarDetalles(ventaId, index + 1);
-            },
+            }
           );
         },
       );

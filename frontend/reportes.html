@@ -146,7 +146,33 @@
         </div>
       </section>
 
-      <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <section class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 mb-8">
+        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
+          <div>
+            <h2 class="text-2xl font-black">Cartera de clientes</h2>
+            <p id="carteraAlcance" class="text-sm text-zinc-400 mt-1"></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+            <p class="text-zinc-500 text-sm">Cuentas por cobrar</p>
+            <p id="carteraTotalPorCobrar" class="text-3xl font-black text-red-300 mt-2">$0.00</p>
+          </div>
+
+          <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+            <p class="text-zinc-500 text-sm">Créditos de clientes</p>
+            <p id="carteraTotalCreditos" class="text-3xl font-black text-green-300 mt-2">$0.00</p>
+          </div>
+
+          <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
+            <p id="carteraEtiquetaNeto" class="text-zinc-500 text-sm">Saldo neto por cobrar</p>
+            <p id="carteraSaldoNeto" class="text-3xl font-black text-cyan-300 mt-2">$0.00</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
           <div class="p-6 border-b border-zinc-800">
             <h2 class="text-2xl font-black">Bajo inventario</h2>
@@ -169,7 +195,7 @@
 
         <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
           <div class="p-6 border-b border-zinc-800">
-            <h2 class="text-2xl font-black">Fiados pendientes</h2>
+            <h2 class="text-2xl font-black">Cuentas por cobrar</h2>
           </div>
 
           <div class="overflow-x-auto">
@@ -177,17 +203,35 @@
               <thead class="bg-zinc-800 text-zinc-300">
                 <tr>
                   <th class="p-3">Cliente</th>
-                  <th class="p-3">Deuda</th>
+                  <th class="p-3">Saldo</th>
                 </tr>
               </thead>
-              <tbody id="tablaFiadosPendientes" class="divide-y divide-zinc-800"></tbody>
+              <tbody id="tablaCuentasPorCobrar" class="divide-y divide-zinc-800"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+          <div class="p-6 border-b border-zinc-800">
+            <h2 class="text-2xl font-black">Saldos a favor</h2>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="bg-zinc-800 text-zinc-300">
+                <tr>
+                  <th class="p-3">Cliente</th>
+                  <th class="p-3">Crédito</th>
+                </tr>
+              </thead>
+              <tbody id="tablaSaldosAFavor" class="divide-y divide-zinc-800"></tbody>
             </table>
           </div>
         </div>
       </section>
     </main>
 
-    <script src="./js/session.js?v=20260607"></script>
-    <script src="./js/reportes.js?v=20260704"></script>
+    <script src="./js/session.js?v=20260715"></script>
+    <script src="./js/reportes.js?v=20260715"></script>
   </body>
 </html>

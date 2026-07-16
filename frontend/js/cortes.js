@@ -19,6 +19,8 @@ const btnActualizarResumen = document.getElementById("btnActualizarResumen");
 const mensaje = document.getElementById("mensaje");
 
 const rangoCorte = document.getElementById("rangoCorte");
+const ventasTotalesTurno = document.getElementById("ventasTotalesTurno");
+const ventasTotalesConteo = document.getElementById("ventasTotalesConteo");
 const ventasEfectivoBrutas = document.getElementById("ventasEfectivoBrutas");
 const ventasEfectivoConteo = document.getElementById("ventasEfectivoConteo");
 const devolucionesEfectivo = document.getElementById("devolucionesEfectivo");
@@ -36,6 +38,8 @@ const previewDiferencia = document.getElementById("previewDiferencia");
 const previewDiferenciaTexto = document.getElementById("previewDiferenciaTexto");
 const resultadoCorte = document.getElementById("resultadoCorte");
 const resultadoTitulo = document.getElementById("resultadoTitulo");
+const ventasTotalesResultado = document.getElementById("ventasTotalesResultado");
+const ventasTotalesResultadoConteo = document.getElementById("ventasTotalesResultadoConteo");
 const dineroEsperadoResultado = document.getElementById("dineroEsperadoResultado");
 const dineroRealResultado = document.getElementById("dineroRealResultado");
 const diferencia = document.getElementById("diferencia");
@@ -155,6 +159,9 @@ async function realizarCorte() {
 
 function renderResumenCorte(data) {
   rangoCorte.textContent = `Desde el ultimo corte: ${formatearFechaLocal(data.desde)}`;
+  ventasTotalesTurno.textContent = formatearDinero(data.ventas_totales_brutas);
+  ventasTotalesConteo.textContent =
+    `${Number(data.ventas_totales_operaciones || 0)} ventas registradas. Incluye todos los metodos de pago; no todo entra como efectivo.`;
   ventasEfectivoBrutas.textContent = formatearDinero(data.ventas_efectivo_brutas);
   ventasEfectivoConteo.textContent =
     `${Number(data.ventas_efectivo_operaciones || 0)} operaciones en efectivo`;
@@ -293,6 +300,9 @@ function mostrarResultado(data) {
   resultadoTitulo.textContent = estado.texto;
   resultadoTitulo.className = `text-3xl font-black mt-1 ${estado.color}`;
 
+  ventasTotalesResultado.textContent = formatearDinero(data.ventas_totales_brutas);
+  ventasTotalesResultadoConteo.textContent =
+    `${Number(data.ventas_totales_operaciones || 0)} ventas registradas. Incluye todos los metodos de pago; no todo entra como efectivo.`;
   dineroEsperadoResultado.textContent = formatearDinero(data.dinero_esperado);
   dineroRealResultado.textContent = formatearDinero(data.dinero_real);
   diferencia.textContent = formatearDinero(Math.abs(Number(data.diferencia)));

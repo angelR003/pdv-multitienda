@@ -1,4 +1,15 @@
 const db = require("../database/connection");
+const {
+  redondearCentavos,
+  derivarEstadoCuenta,
+  agregarEstadoCuenta,
+} = require("../services/cuentaCliente.service");
+const {
+  calcularHuellaPayloadAbono,
+  normalizarOperationId,
+  normalizarPayloadAbono,
+  parsearRespuestaOperacion,
+} = require("../services/idempotenciaAbonos.service");
 
 const FILTRO_DEUDAS_ENVASE = `
   AND f.concepto NOT LIKE 'Envase prestado - %'
@@ -14,6 +25,7 @@ const calcularEstadoCliente = (clienteId, callback) => {
   db.get(
     `
     SELECT
+      c.activo,
       COALESCE((
         SELECT SUM(f.monto)
         FROM fiados f
@@ -41,7 +53,9 @@ const calcularEstadoCliente = (clienteId, callback) => {
     WHERE c.id = ?
     `,
     [clienteId],
-    callback
+    (error, fila) => {
+      callback(error, error ? null : agregarEstadoCuenta(fila));
+    }
   );
 };
 
@@ -158,12 +172,19 @@ const desactivarClienteFiado = (req, res) => {
       });
     }
 
-    const deuda = Number(estadoCliente.deuda_total || 0);
+    const saldoDeudor = Number(estadoCliente.saldo_deudor || 0);
+    const saldoAFavor = Number(estadoCliente.saldo_a_favor || 0);
     const envasesPendientes = Number(estadoCliente.envases_pendientes || 0);
 
-    if (deuda > 0) {
+    if (saldoDeudor > 0) {
       return res.status(400).json({
         error: "No puedes desactivar un cliente con saldo fiado pendiente",
+      });
+    }
+
+    if (saldoAFavor > 0) {
+      return res.status(400).json({
+        error: "No puedes desactivar un cliente con saldo a favor",
       });
     }
 
@@ -256,7 +277,7 @@ const obtenerClientesFiado = (req, res) => {
       });
     }
 
-    res.json(rows);
+    res.json(rows.map(agregarEstadoCuenta));
   });
 };
 
@@ -320,61 +341,244 @@ const registrarAbono = (req, res) => {
     tienda_id,
     monto,
     observaciones,
+    confirmar_saldo_a_favor,
+    operation_id,
   } = req.body;
 
-  if (!cliente_id || !monto || monto <= 0) {
+  const montoNumero = Number(monto);
+  let operationId;
+
+  try {
+    operationId = normalizarOperationId(operation_id);
+  } catch (errorOperacion) {
+    return res.status(errorOperacion.status || 400).json({
+      error: errorOperacion.message,
+      codigo: errorOperacion.codigo,
+    });
+  }
+
+  if (
+    !cliente_id ||
+    !Number.isFinite(montoNumero) ||
+    montoNumero <= 0
+  ) {
     return res.status(400).json({
       error: "Datos inválidos",
     });
   }
 
+  const payloadOperacion = normalizarPayloadAbono({
+    cliente_id,
+    usuario_id,
+    tienda_id,
+    monto: montoNumero,
+    observaciones,
+  });
+  const huellaPayload = calcularHuellaPayloadAbono(payloadOperacion);
+
   db.serialize(() => {
+    const responderConRollback = (status, payload) => {
+      db.run("ROLLBACK", () => {
+        res.status(status).json(payload);
+      });
+    };
 
-    db.run(`
-      INSERT INTO abonos_fiado (
-        cliente_id,
-        usuario_id,
-        tienda_id,
-        monto,
-        observaciones
-      )
-      VALUES (?, ?, ?, ?, ?)
-    `, [
-      cliente_id,
-      usuario_id,
-      tienda_id,
-      monto,
-      observaciones || null,
-    ]);
-
-    db.run(`
-      INSERT INTO movimientos_caja (
-        tienda_id,
-        usuario_id,
-        tipo_movimiento,
-        monto,
-        concepto,
-        observaciones
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [
-      tienda_id,
-      usuario_id,
-      "entrada_dinero",
-      monto,
-      "Abono de fiado",
-      observaciones || null,
-    ], (error) => {
-
-      if (error) {
-        return res.status(500).json({
-          error: "Error al registrar abono",
+    db.run("BEGIN IMMEDIATE TRANSACTION", (errorTransaccion) => {
+      if (errorTransaccion) {
+        return res.status(409).json({
+          error: "Hay otra operación de fiado en proceso. Intenta de nuevo.",
         });
       }
 
-      res.json({
-        mensaje: "Abono registrado",
-      });
+      db.get(
+        `
+          SELECT operation_id, payload_hash, respuesta_json
+          FROM operaciones_abono_fiado
+          WHERE operation_id = ?
+        `,
+        [operationId],
+        (errorOperacion, operacionExistente) => {
+          if (errorOperacion) {
+            const faltaMigracion = /no such table/i.test(errorOperacion.message);
+            return responderConRollback(faltaMigracion ? 503 : 500, {
+              error: faltaMigracion
+                ? "Falta desplegar la tabla de idempotencia de abonos"
+                : "Error al consultar la operacion de abono",
+              codigo: faltaMigracion
+                ? "MIGRACION_IDEMPOTENCIA_PENDIENTE"
+                : "ERROR_IDEMPOTENCIA_ABONO",
+            });
+          }
+
+          if (operacionExistente) {
+            if (operacionExistente.payload_hash !== huellaPayload) {
+              return responderConRollback(409, {
+                error: "operation_id ya fue utilizado con datos diferentes",
+                codigo: "OPERATION_ID_REUTILIZADO",
+              });
+            }
+
+            const respuestaPrevia = parsearRespuestaOperacion(
+              operacionExistente.respuesta_json
+            );
+
+            if (!respuestaPrevia) {
+              return responderConRollback(500, {
+                error: "La operacion previa no tiene una respuesta valida",
+                codigo: "RESPUESTA_IDEMPOTENTE_INVALIDA",
+              });
+            }
+
+            return responderConRollback(200, {
+              ...respuestaPrevia,
+              idempotente: true,
+            });
+          }
+
+          calcularEstadoCliente(cliente_id, (errorEstado, estadoCliente) => {
+        if (errorEstado) {
+          return responderConRollback(500, {
+            error: "Error al validar el saldo del cliente",
+          });
+        }
+
+        if (!estadoCliente || Number(estadoCliente.activo) !== 1) {
+          return responderConRollback(404, {
+            error: "Cliente no encontrado o inactivo",
+          });
+        }
+
+        const saldoResultante = redondearCentavos(
+          estadoCliente.saldo_neto - montoNumero
+        );
+        const resumenResultante = derivarEstadoCuenta(saldoResultante);
+
+        if (
+          resumenResultante.saldo_a_favor > 0 &&
+          confirmar_saldo_a_favor !== true
+        ) {
+          return responderConRollback(409, {
+            error: "El abono generará saldo a favor y requiere confirmación",
+            codigo: "CONFIRMACION_SALDO_A_FAVOR_REQUERIDA",
+            requiere_confirmacion: true,
+            monto_abono: redondearCentavos(montoNumero),
+            saldo_actual: {
+              saldo_neto: estadoCliente.saldo_neto,
+              saldo_deudor: estadoCliente.saldo_deudor,
+              saldo_a_favor: estadoCliente.saldo_a_favor,
+              estado_cuenta: estadoCliente.estado_cuenta,
+            },
+            saldo_resultante: resumenResultante,
+          });
+        }
+
+        db.run(
+          `
+          INSERT INTO abonos_fiado (
+            cliente_id,
+            usuario_id,
+            tienda_id,
+            monto,
+            observaciones
+          )
+          VALUES (?, ?, ?, ?, ?)
+          `,
+          [
+            cliente_id,
+            usuario_id,
+            tienda_id,
+            montoNumero,
+            payloadOperacion.observaciones,
+          ],
+          function (errorAbono) {
+            if (errorAbono) {
+              return responderConRollback(500, {
+                error: "Error al registrar abono",
+              });
+            }
+
+            const abonoId = this.lastID;
+
+            db.run(
+              `
+              INSERT INTO movimientos_caja (
+                tienda_id,
+                usuario_id,
+                tipo_movimiento,
+                monto,
+                concepto,
+                observaciones
+              )
+              VALUES (?, ?, ?, ?, ?, ?)
+              `,
+              [
+                tienda_id,
+                usuario_id,
+                "entrada_dinero",
+                montoNumero,
+                "Abono de fiado",
+                observaciones || null,
+              ],
+              function (errorCaja) {
+                if (errorCaja) {
+                  return responderConRollback(500, {
+                    error: "Error al registrar abono",
+                  });
+                }
+
+                const movimientoCajaId = this.lastID;
+                const respuestaOperacion = {
+                  mensaje: "Abono registrado",
+                  id: abonoId,
+                  operation_id: operationId,
+                  idempotente: false,
+                  ...resumenResultante,
+                };
+
+                db.run(
+                  `
+                    INSERT INTO operaciones_abono_fiado (
+                      operation_id,
+                      payload_hash,
+                      cliente_id,
+                      abono_id,
+                      movimiento_caja_id,
+                      respuesta_json
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                  `,
+                  [
+                    operationId,
+                    huellaPayload,
+                    payloadOperacion.cliente_id,
+                    abonoId,
+                    movimientoCajaId,
+                    JSON.stringify(respuestaOperacion),
+                  ],
+                  (errorRegistroOperacion) => {
+                    if (errorRegistroOperacion) {
+                      return responderConRollback(500, {
+                        error: "Error al registrar idempotencia del abono",
+                      });
+                    }
+
+                    db.run("COMMIT", (errorCommit) => {
+                      if (errorCommit) {
+                        return responderConRollback(500, {
+                          error: "Error al confirmar el abono",
+                        });
+                      }
+
+                      res.json(respuestaOperacion);
+                    });
+                  }
+                );
+              }
+            );
+          }
+        );
+          });
+        }
+      );
     });
   });
 };

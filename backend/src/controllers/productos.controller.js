@@ -33,14 +33,120 @@ const normalizarProductoSalida = (producto) => ({
   unidad: normalizarCampoTexto(producto.unidad) || "pieza",
 });
 
+const validarConfiguracionDerivada = (
+  { productoId = null, esDerivado, productoPadreId, factorConversion },
+  callback
+) => {
+  if (!esDerivado) return callback(null);
+
+  const padreId = Number(productoPadreId);
+  const factor = Number(factorConversion);
+
+  if (!Number.isInteger(padreId) || padreId <= 0) {
+    return callback(new Error("Selecciona un producto padre valido"));
+  }
+
+  if (!Number.isFinite(factor) || factor <= 0) {
+    return callback(new Error("El factor de conversion debe ser mayor a cero"));
+  }
+
+  if (productoId && Number(productoId) === padreId) {
+    return callback(new Error("Un producto no puede ser su propio padre"));
+  }
+
+  const validarPadre = () => {
+    db.get(
+      `
+        SELECT id, nombre, es_derivado
+        FROM productos
+        WHERE id = ? AND activo = 1
+      `,
+      [padreId],
+      (errorPadre, padre) => {
+        if (errorPadre) return callback(errorPadre);
+
+        if (!padre) {
+          return callback(new Error("El producto padre no existe o esta inactivo"));
+        }
+
+        if (Number(padre.es_derivado || 0) === 1) {
+          return callback(
+            new Error("Un producto derivado no puede depender de otro derivado")
+          );
+        }
+
+        callback(null);
+      }
+    );
+  };
+
+  if (!productoId) return validarPadre();
+
+  db.get(
+    `
+      SELECT COUNT(*) AS total
+      FROM productos
+      WHERE producto_padre_id = ?
+        AND es_derivado = 1
+        AND id <> ?
+    `,
+    [productoId, productoId],
+    (errorHijos, rowHijos) => {
+      if (errorHijos) return callback(errorHijos);
+
+      if (Number(rowHijos?.total || 0) > 0) {
+        return callback(
+          new Error("Un producto padre con derivados no puede convertirse en derivado")
+        );
+      }
+
+      validarPadre();
+    }
+  );
+};
+
+const productoTieneHistoriaInventario = (productoId, callback) => {
+  db.get(
+    `
+      SELECT CASE WHEN
+        EXISTS(SELECT 1 FROM venta_detalles WHERE producto_id = ?)
+        OR EXISTS(SELECT 1 FROM entrada_detalles WHERE producto_id = ?)
+        OR EXISTS(SELECT 1 FROM ajustes_inventario WHERE producto_id = ?)
+        OR EXISTS(SELECT 1 FROM devolucion_detalles WHERE producto_id = ?)
+        OR EXISTS(SELECT 1 FROM traspaso_detalles WHERE producto_id = ?)
+        OR EXISTS(
+          SELECT 1
+          FROM inventario
+          WHERE producto_id = ? AND ABS(cantidad_actual) > 0.000000001
+        )
+      THEN 1 ELSE 0 END AS tiene_historia
+    `,
+    [productoId, productoId, productoId, productoId, productoId, productoId],
+    (error, row) => {
+      if (error) return callback(error);
+      callback(null, Number(row?.tiene_historia || 0) === 1);
+    }
+  );
+};
+
+// Inventario aplica impactos físicos con precisión de nueve decimales. Dos
+// factores con la misma representación física no constituyen un cambio real.
+const normalizarFactorInventario = (valor) => {
+  const factor = Number(valor);
+  return Number.isFinite(factor) ? Number(factor.toFixed(9)) : factor;
+};
+
 const obtenerProductos = (req, res) => {
   const query = `
     SELECT
       p.*,
+      padre.nombre AS producto_padre_nombre,
+      padre.unidad AS producto_padre_unidad,
       d.factor_conversion_derivado,
       d.producto_derivado_nombre,
       d.unidad_derivada
     FROM productos p
+    LEFT JOIN productos padre ON padre.id = p.producto_padre_id
     LEFT JOIN (
       SELECT
         producto_padre_id,
@@ -180,11 +286,7 @@ const crearProducto = (req, res) => {
     });
   }
 
-  if (es_derivado && (!producto_padre_id || !factor_conversion || factor_conversion <= 0)) {
-    return res.status(400).json({
-      error: "Selecciona producto padre y unidades por paquete para el producto derivado",
-    });
-  }
+  const esDerivadoNumero = Number(es_derivado || 0) === 1;
 
   const query = `
     INSERT INTO productos (
@@ -207,7 +309,18 @@ const crearProducto = (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  db.run(
+  validarConfiguracionDerivada(
+    {
+      esDerivado: esDerivadoNumero,
+      productoPadreId: producto_padre_id,
+      factorConversion: factor_conversion,
+    },
+    (errorDerivado) => {
+      if (errorDerivado) {
+        return res.status(400).json({ error: errorDerivado.message });
+      }
+
+      db.run(
     query,
     [
       tipoProductoTexto,
@@ -220,9 +333,9 @@ const crearProducto = (req, res) => {
       precio_global,
       costo_compra || 0,
       requiere_caducidad ? 1 : 0,
-      es_derivado || 0,
-      producto_padre_id || null,
-      factor_conversion || 1,
+      esDerivadoNumero ? 1 : 0,
+      esDerivadoNumero ? Number(producto_padre_id) : null,
+      esDerivadoNumero ? Number(factor_conversion) : 1,
       es_retornable ? 1 : 0,
       es_retornable ? Number(tipo_envase_id) : null
     ],
@@ -244,16 +357,32 @@ const crearProducto = (req, res) => {
         producto_id: this.lastID,
       });
     }
+      );
+    }
   );
 };
 const obtenerProductoPorId = (req, res) => {
   const { id } = req.params;
 
   const query = `
-    SELECT *
-    FROM productos
-    WHERE id = ?
-    AND activo = 1
+    SELECT
+      p.*,
+      padre.nombre AS producto_padre_nombre,
+      CASE WHEN
+        EXISTS(SELECT 1 FROM venta_detalles WHERE producto_id = p.id)
+        OR EXISTS(SELECT 1 FROM entrada_detalles WHERE producto_id = p.id)
+        OR EXISTS(SELECT 1 FROM ajustes_inventario WHERE producto_id = p.id)
+        OR EXISTS(SELECT 1 FROM devolucion_detalles WHERE producto_id = p.id)
+        OR EXISTS(SELECT 1 FROM traspaso_detalles WHERE producto_id = p.id)
+        OR EXISTS(
+          SELECT 1 FROM inventario
+          WHERE producto_id = p.id AND ABS(cantidad_actual) > 0.000000001
+        )
+      THEN 1 ELSE 0 END AS tiene_historia_inventario
+    FROM productos p
+    LEFT JOIN productos padre ON padre.id = p.producto_padre_id
+    WHERE p.id = ?
+    AND p.activo = 1
   `;
 
   db.get(query, [id], (error, row) => {
@@ -290,6 +419,7 @@ const actualizarProducto = (req, res) => {
     es_derivado,
     producto_padre_id,
     factor_conversion,
+    actualizar_relacion_derivada,
     es_retornable,
     tipo_envase_id
   } = req.body;
@@ -314,64 +444,142 @@ const actualizarProducto = (req, res) => {
     });
   }
 
-  if (es_derivado && (!producto_padre_id || !factor_conversion || factor_conversion <= 0)) {
-    return res.status(400).json({
-      error: "Selecciona producto padre y unidades por paquete para el producto derivado",
-    });
-  }
+  const productoId = Number(id);
+  const solicitaCambioRelacion = actualizar_relacion_derivada === true;
 
-const query = `
-  UPDATE productos
-  SET
-    tipo_producto = ?,
-    codigo_barras = ?,
-    nombre = ?,
-    categoria = ?,
-    marca = ?,
-    presentacion = ?,
-    unidad = ?,
-    precio_global = ?,
-    costo_compra = ?,
-    requiere_caducidad = ?,
-    es_derivado = ?,
-    producto_padre_id = ?,
-    factor_conversion = ?,
-    es_retornable = ?,
-    tipo_envase_id = ?
-  WHERE id = ?
-`;
+  const query = `
+    UPDATE productos
+    SET
+      tipo_producto = ?,
+      codigo_barras = ?,
+      nombre = ?,
+      categoria = ?,
+      marca = ?,
+      presentacion = ?,
+      unidad = ?,
+      precio_global = ?,
+      costo_compra = ?,
+      requiere_caducidad = ?,
+      es_derivado = ?,
+      producto_padre_id = ?,
+      factor_conversion = ?,
+      es_retornable = ?,
+      tipo_envase_id = ?
+    WHERE id = ?
+  `;
 
-  db.run(
-    query,
-   [
-  tipoProductoTexto,
-  codigoBarrasTexto,
-  nombreTexto,
-  categoriaTexto,
-  marcaTexto,
-  presentacionTexto,
-  unidadTexto,
-  precio_global,
-  costo_compra,
-  requiere_caducidad ? 1 : 0,
-  es_derivado || 0,
-  producto_padre_id || null,
-  factor_conversion || 1,
-  es_retornable ? 1 : 0,
-  es_retornable ? Number(tipo_envase_id) : null,
-  id,
-],
-    function (error) {
-      if (error) {
-        return res.status(500).json({
-          error: "Error al actualizar producto",
-          detalle: error.message
-        });
+  db.get(
+    `
+      SELECT es_derivado, producto_padre_id, factor_conversion
+      FROM productos
+      WHERE id = ?
+    `,
+    [productoId],
+    (errorActual, productoActual) => {
+      if (errorActual) {
+        return res.status(500).json({ error: "Error al consultar producto" });
       }
 
-      res.json({
-        mensaje: "Producto actualizado correctamente",
-      });
+      if (!productoActual) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+
+      const esDerivadoActual = Number(productoActual.es_derivado || 0) === 1;
+      const esDerivadoSolicitado = Number(es_derivado || 0) === 1;
+      const esDerivadoFinal = solicitaCambioRelacion
+        ? esDerivadoSolicitado
+        : esDerivadoActual;
+      const padreSolicitado = esDerivadoSolicitado
+        ? Number(producto_padre_id)
+        : null;
+      const factorSolicitado = esDerivadoSolicitado
+        ? Number(factor_conversion)
+        : 1;
+      const padreActual = esDerivadoActual
+        ? Number(productoActual.producto_padre_id)
+        : null;
+      const factorActual = esDerivadoActual
+        ? Number(productoActual.factor_conversion)
+        : 1;
+      const relacionCambio = solicitaCambioRelacion && (
+        esDerivadoActual !== esDerivadoSolicitado ||
+        Number(padreActual || 0) !== Number(padreSolicitado || 0) ||
+        normalizarFactorInventario(factorActual) !==
+          normalizarFactorInventario(factorSolicitado)
+      );
+      const padreFinal = relacionCambio ? padreSolicitado : padreActual;
+      const factorFinal = relacionCambio ? factorSolicitado : factorActual;
+
+      const ejecutarActualizacion = () => {
+        db.run(
+          query,
+          [
+            tipoProductoTexto,
+            codigoBarrasTexto,
+            nombreTexto,
+            categoriaTexto,
+            marcaTexto,
+            presentacionTexto,
+            unidadTexto,
+            precio_global,
+            costo_compra,
+            requiere_caducidad ? 1 : 0,
+            esDerivadoFinal ? 1 : 0,
+            esDerivadoFinal ? padreFinal : null,
+            esDerivadoFinal ? factorFinal : 1,
+            es_retornable ? 1 : 0,
+            es_retornable ? Number(tipo_envase_id) : null,
+            productoId,
+          ],
+          function (error) {
+            if (error) {
+              return res.status(500).json({
+                error: "Error al actualizar producto",
+                detalle: error.message,
+              });
+            }
+
+            res.json({ mensaje: "Producto actualizado correctamente" });
+          }
+        );
+      };
+
+      if (!relacionCambio) return ejecutarActualizacion();
+
+      validarConfiguracionDerivada(
+        {
+          productoId,
+          esDerivado: esDerivadoSolicitado,
+          productoPadreId: padreSolicitado,
+          factorConversion: factorSolicitado,
+        },
+        (errorDerivado) => {
+          if (errorDerivado) {
+            return res.status(400).json({ error: errorDerivado.message });
+          }
+
+          productoTieneHistoriaInventario(
+            productoId,
+            (errorHistoria, tieneHistoria) => {
+              if (errorHistoria) {
+                return res.status(500).json({
+                  error: "Error al validar historial del producto",
+                });
+              }
+
+              if (tieneHistoria) {
+                return res.status(409).json({
+                  error:
+                    "No se puede cambiar padre o factor: el producto ya tiene historial de inventario. Desactivalo y crea uno nuevo.",
+                });
+              }
+
+              ejecutarActualizacion();
+            }
+          );
+        }
+      );
     }
   );
 };

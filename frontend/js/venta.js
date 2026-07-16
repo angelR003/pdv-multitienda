@@ -20,7 +20,6 @@ const cambioVenta = document.getElementById("cambioVenta");
 
 const usuarioNombre = document.getElementById("usuarioNombre");
 const usuarioRol = document.getElementById("usuarioRol");
-const btnLogout = document.getElementById("btnLogout");
 
 if (!token || !usuario) {
   window.location.href = "./login.html";
@@ -35,7 +34,6 @@ const totalVenta = document.getElementById("totalVenta");
 const totalProductos = document.getElementById("totalProductos");
 const metodoPago = document.getElementById("metodoPago");
 const btnCobrar = document.getElementById("btnCobrar");
-const btnLimpiar = document.getElementById("btnLimpiar");
 const mensaje = document.getElementById("mensaje");
 const btnProductoManual = document.getElementById("btnProductoManual");
 const modalManual = document.getElementById("modalManual");
@@ -98,6 +96,7 @@ let promocionesActivas = [];
 let resolverEnvasesVenta = null;
 let resolverPagoMixto = null;
 let totalPagoMixtoActual = 0;
+let mensajeBasePagoMixto = "";
 let consecutivoLineaEspecial = 1;
 let ventaEnProceso = false;
 const redondeoOperativo = window.RedondeoOperativo;
@@ -107,10 +106,32 @@ let overflowBodyAntesModalEnvases = "";
 
 const usuarioId = usuario.id;
 
+function obtenerSaldoNetoCliente(cliente) {
+  return Number(cliente?.saldo_neto ?? cliente?.deuda_total ?? 0);
+}
+
+function describirSaldoCuenta(saldoNeto) {
+  const saldo = redondearCentavos(Number(saldoNeto || 0));
+
+  if (saldo > 0) {
+    return `Debe: $${saldo.toFixed(2)}`;
+  }
+
+  if (saldo < 0) {
+    return `Saldo a favor: $${Math.abs(saldo).toFixed(2)}`;
+  }
+
+  return "Sin saldo pendiente";
+}
+
+function describirClienteFiado(cliente) {
+  return `${cliente.nombre_completo} - ${describirSaldoCuenta(
+    obtenerSaldoNetoCliente(cliente)
+  )}`;
+}
+
 usuarioNombre.textContent = usuario.nombre;
 usuarioRol.textContent = `${usuario.rol} • ${usuario.tienda}`;
-
-btnLogout.addEventListener("click", cerrarSesion);
 
 codigoInput.addEventListener("keydown", async (event) => {
   if (event.key !== "Enter") return;
@@ -164,15 +185,6 @@ btnCobrar.addEventListener("click", async (event) => {
   event.stopPropagation();
 
   await cobrarVenta();
-});
-
-btnLimpiar.addEventListener("click", (event) => {
-  event.preventDefault();
-  carrito = [];
-  reiniciarEstadoPagoVenta();
-  ocultarResultadosBusquedaManual();
-  renderCarrito();
-  mostrarMensaje("Venta limpiada.");
 });
 
 pagoCon.addEventListener("input", calcularCambio);
@@ -846,19 +858,25 @@ async function cobrarVenta() {
       );
 
       if (cliente) {
-        const deudaActual = Number(cliente.deuda_total || 0);
+        const saldoNetoActual = obtenerSaldoNetoCliente(cliente);
         const limite = Number(cliente.limite_credito || 0);
         const totalVenta = carrito.reduce(
           (total, item) => total + Number(item.subtotal || 0),
           0,
         );
 
-        if (limite > 0 && deudaActual + totalVenta > limite) {
+        const saldoNetoResultante = redondearCentavos(
+          saldoNetoActual + totalVenta
+        );
+        const saldoDeudorResultante = Math.max(saldoNetoResultante, 0);
+
+        if (limite > 0 && saldoDeudorResultante > limite) {
           const continuar = confirm(
             `ATENCIÓN: este fiado superará el límite del cliente.\n\n` +
               `Cliente: ${cliente.nombre_completo}\n` +
-              `Deuda actual: $${deudaActual.toFixed(2)}\n` +
+              `Estado actual: ${describirSaldoCuenta(saldoNetoActual)}\n` +
               `Venta actual: $${totalVenta.toFixed(2)}\n` +
+              `Estado posterior: ${describirSaldoCuenta(saldoNetoResultante)}\n` +
               `Límite: $${limite.toFixed(2)}\n\n` +
               `¿Deseas aceptar y continuar?`,
           );
@@ -964,6 +982,20 @@ function actualizarResumenPagoMixto() {
   if (fiado <= 0 && pagoMixtoCliente) {
     pagoMixtoCliente.value = "";
   }
+
+  const cliente = clientesFiado.find(
+    (item) => Number(item.id) === Number(pagoMixtoCliente?.value)
+  );
+  const mensajes = mensajeBasePagoMixto ? [mensajeBasePagoMixto] : [];
+
+  if (fiado > 0 && cliente) {
+    const saldoResultante = redondearCentavos(
+      obtenerSaldoNetoCliente(cliente) + fiado
+    );
+    mensajes.push(`Después de esta parte fiada: ${describirSaldoCuenta(saldoResultante)}.`);
+  }
+
+  mensajePagoMixto.textContent = mensajes.join(" ");
 }
 
 function abrirModalPagoMixto(totalProductos, totalImportes) {
@@ -975,9 +1007,10 @@ function abrirModalPagoMixto(totalProductos, totalImportes) {
   pagoMixtoFiado.value = "";
   pagoMixtoCliente.value = "";
   pagoMixtoObservaciones.value = "";
-  mensajePagoMixto.textContent = totalImportes > 0
+  mensajeBasePagoMixto = totalImportes > 0
     ? `El importe de envases ($${redondearCentavos(totalImportes).toFixed(2)}) se cobra aparte en efectivo o transferencia.`
     : "";
+  mensajePagoMixto.textContent = mensajeBasePagoMixto;
   actualizarResumenPagoMixto();
 
   modalPagoMixto.classList.remove("hidden");
@@ -996,7 +1029,7 @@ async function pedirPagoMixto(totalProductos, totalImportes) {
   clientesFiado.forEach((cliente) => {
     const option = document.createElement("option");
     option.value = cliente.id;
-    option.textContent = `${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}`;
+    option.textContent = describirClienteFiado(cliente);
     pagoMixtoCliente.appendChild(option);
   });
 
@@ -1017,13 +1050,6 @@ function esProductoAGranel(producto) {
 
 function calcularSubtotalOperativo(producto, subtotalBase) {
   return redondeoOperativo.calcularSubtotalOperativo(producto, subtotalBase);
-}
-
-function cerrarSesion() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("usuario");
-
-  window.location.href = "./login.html";
 }
 
 function calcularCambio() {
@@ -1124,7 +1150,7 @@ async function cargarClientesFiado() {
     clientesFiado.forEach((cliente) => {
       const option = document.createElement("option");
       option.value = cliente.id;
-      option.textContent = `${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}`;
+      option.textContent = describirClienteFiado(cliente);
       clienteFiado.appendChild(option);
     });
 
@@ -1393,7 +1419,7 @@ async function pedirEnvasesVenta() {
   const opcionesClientes = clientesFiado
     .map(
       (cliente) =>
-        `<option value="${cliente.id}" ${Number(cliente.id) === Number(clienteVentaFiada?.id) ? "selected" : ""}>${cliente.nombre_completo} - debe $${Number(cliente.deuda_total || 0).toFixed(2)}</option>`
+        `<option value="${cliente.id}" ${Number(cliente.id) === Number(clienteVentaFiada?.id) ? "selected" : ""}>${describirClienteFiado(cliente)}</option>`
     )
     .join("");
 
@@ -1605,6 +1631,7 @@ btnCancelarEnvasesVenta?.addEventListener("click", () => {
 pagoMixtoEfectivo?.addEventListener("input", actualizarResumenPagoMixto);
 pagoMixtoTransferencia?.addEventListener("input", actualizarResumenPagoMixto);
 pagoMixtoFiado?.addEventListener("input", actualizarResumenPagoMixto);
+pagoMixtoCliente?.addEventListener("change", actualizarResumenPagoMixto);
 
 btnCancelarPagoMixto?.addEventListener("click", () => {
   cerrarModalPagoMixto();
@@ -1625,14 +1652,43 @@ btnConfirmarPagoMixto?.addEventListener("click", () => {
   }
 
   if (Math.abs(suma - totalPagoMixtoActual) > 0.01) {
-    mensajePagoMixto.textContent = `El desglose debe sumar $${totalPagoMixtoActual.toFixed(2)} en productos.`;
     actualizarResumenPagoMixto();
+    mensajePagoMixto.textContent = `El desglose debe sumar $${totalPagoMixtoActual.toFixed(2)} en productos.`;
     return;
   }
 
   if (fiado > 0 && !pagoMixtoCliente.value) {
     mensajePagoMixto.textContent = "Selecciona cliente para la parte fiada.";
     return;
+  }
+
+  if (fiado > 0) {
+    const cliente = clientesFiado.find(
+      (item) => Number(item.id) === Number(pagoMixtoCliente.value)
+    );
+
+    if (cliente) {
+      const saldoResultante = redondearCentavos(
+        obtenerSaldoNetoCliente(cliente) + fiado
+      );
+      const limite = Number(cliente.limite_credito || 0);
+
+      if (limite > 0 && Math.max(saldoResultante, 0) > limite) {
+        const continuar = confirm(
+          `ATENCIÓN: la parte fiada superará el límite del cliente.\n\n` +
+            `Cliente: ${cliente.nombre_completo}\n` +
+            `Estado actual: ${describirSaldoCuenta(obtenerSaldoNetoCliente(cliente))}\n` +
+            `Parte fiada: $${fiado.toFixed(2)}\n` +
+            `Estado posterior: ${describirSaldoCuenta(saldoResultante)}\n` +
+            `Límite: $${limite.toFixed(2)}\n\n` +
+            `¿Deseas aceptar y continuar?`
+        );
+
+        if (!continuar) {
+          return;
+        }
+      }
+    }
   }
 
   cerrarModalPagoMixto();

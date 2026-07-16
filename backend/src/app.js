@@ -5,7 +5,10 @@ const path = require("path");
 const { crearBackup } = require("./utils/backup");
 
 require("dotenv").config();
-require("./database/connection");
+const db = require("./database/connection");
+const {
+  runRequiredMigrations,
+} = require("./database/run-required-migrations");
 require("./database/run-migrations");
 require("./database/migrar-fiados");
 require("./database/migrar-accesos");
@@ -74,6 +77,7 @@ const PORT = process.env.PORT || 3000;
 
 
 ensureDatabase()
+  .then(() => runRequiredMigrations({ db }))
   .then(() => {
     crearBackup();
     app.listen(PORT, () => {
@@ -81,5 +85,6 @@ ensureDatabase()
     });
   })
   .catch((error) => {
-    console.error("Error preparando base de datos:", error.message);
+    console.error("Error preparando base de datos o migraciones:", error.message);
+    process.exitCode = 1;
   });

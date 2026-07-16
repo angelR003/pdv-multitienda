@@ -60,7 +60,10 @@ async function cargarProductos() {
       },
     });
 
-    productos = await response.json();
+    const productosRecibidos = await response.json();
+    productos = Array.isArray(productosRecibidos)
+      ? productosRecibidos
+      : [];
 
     producto.innerHTML = "";
 
@@ -72,6 +75,8 @@ async function cargarProductos() {
       option.dataset.presentacion = item.presentacion || "";
       option.dataset.unidad = item.unidad || "";
       option.dataset.esDerivado = item.es_derivado || 0;
+      const esDerivado = Number(item.es_derivado || 0) === 1;
+      option.disabled = esDerivado;
 
       const unidadesPorPaquete = obtenerUnidadesPorPaquete(item);
       const nombreUnidad =
@@ -79,14 +84,19 @@ async function cargarProductos() {
           ? item.presentacion || item.unidad
           : item.unidad;
 
-      option.textContent = `${item.nombre} (${nombreUnidad})`;
+      option.textContent = esDerivado
+        ? `${item.nombre} — derivado; ajustar ${item.producto_padre_nombre || "producto padre"}`
+        : `${item.nombre} (${nombreUnidad})`;
 
       producto.appendChild(option);
     });
 
     actualizarCampoCantidad();
-    if (productos.length > 0 && !buscarProductoAjuste.value) {
-      seleccionarProductoAjuste(productos[0], false);
+    const primerProductoFisico = productos.find(
+      (item) => Number(item.es_derivado || 0) === 0
+    );
+    if (primerProductoFisico && !buscarProductoAjuste.value) {
+      seleccionarProductoAjuste(primerProductoFisico, false);
     }
 
   } catch (error) {
@@ -99,6 +109,13 @@ async function realizarAjuste() {
 
   if (!productoSeleccionado) {
     mostrarMensaje("Selecciona un producto.");
+    return;
+  }
+
+  if (Number(productoSeleccionado.es_derivado || 0) === 1) {
+    mostrarMensaje(
+      `Ajusta la existencia en ${productoSeleccionado.producto_padre_nombre || "el producto padre"}.`
+    );
     return;
   }
 
@@ -254,6 +271,8 @@ function renderResultadosProductoAjuste() {
   filtrados.forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
+    const esDerivado = Number(item.es_derivado || 0) === 1;
+    button.disabled = esDerivado;
     button.className = "w-full text-left px-4 py-3 hover:bg-zinc-900 border-b border-zinc-800 last:border-b-0";
     const unidadesPorPaquete = obtenerUnidadesPorPaquete(item);
     const nombreUnidad =
@@ -267,8 +286,15 @@ function renderResultadosProductoAjuste() {
         ${item.codigo_barras || "Sin codigo"}${item.marca ? ` - ${item.marca}` : ""}${item.categoria ? ` - ${item.categoria}` : ""}${item.presentacion ? ` - ${item.presentacion}` : ""}
       </div>
       <div class="text-xs text-zinc-400 mt-1">${nombreUnidad}</div>
+      ${
+        esDerivado
+          ? `<div class="text-xs text-amber-300 mt-1">Derivado: ajusta ${item.producto_padre_nombre || "el producto padre"}</div>`
+          : ""
+      }
     `;
-    button.addEventListener("click", () => seleccionarProductoAjuste(item));
+    if (!esDerivado) {
+      button.addEventListener("click", () => seleccionarProductoAjuste(item));
+    }
     resultadosProductoAjuste.appendChild(button);
   });
 

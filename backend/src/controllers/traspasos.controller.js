@@ -1,4 +1,11 @@
 const db = require("../database/connection");
+const {
+  calcularDisponibilidadComercial,
+  consultarSaldo,
+  descontarInventario,
+  resolverMovimiento,
+  sumarInventario,
+} = require("../services/inventarioFisico.service");
 
 function esAdmin(req) {
   return req.usuario?.rol === "administrador";
@@ -61,21 +68,59 @@ const obtenerProductosParaTraspaso = (req, res) => {
       p.es_derivado,
       p.producto_padre_id,
       p.factor_conversion,
-      COALESCE(i.cantidad_actual, 0) AS cantidad_actual
+      CASE
+        WHEN p.es_derivado = 1 THEN p.producto_padre_id
+        ELSE p.id
+      END AS producto_fisico_id,
+      COALESCE(i.cantidad_actual, 0) AS cantidad_fisica_actual,
+      COALESCE(i_hijo.cantidad_actual, 0) AS cantidad_legacy_hijo
     FROM productos p
     LEFT JOIN inventario i
-      ON i.producto_id = p.id
+      ON i.producto_id = CASE
+        WHEN p.es_derivado = 1 THEN p.producto_padre_id
+        ELSE p.id
+      END
       AND i.tienda_id = ?
+    LEFT JOIN inventario i_hijo
+      ON i_hijo.producto_id = p.id
+      AND i_hijo.tienda_id = ?
+      AND p.es_derivado = 1
     WHERE p.activo = 1
     ORDER BY p.nombre ASC
     `,
-    [tienda_id],
+    [tienda_id, tienda_id],
     (error, rows) => {
       if (error) {
         return res.status(500).json({ error: "Error al obtener productos" });
       }
 
-      res.json(rows);
+      const productos = rows.map((producto) => {
+        const esDerivado = Number(producto.es_derivado || 0) === 1;
+        let cantidadActual = Number(producto.cantidad_fisica_actual || 0);
+
+        if (esDerivado) {
+          try {
+            cantidadActual = calcularDisponibilidadComercial(
+              producto.cantidad_fisica_actual,
+              producto.factor_conversion
+            );
+          } catch (errorFactor) {
+            cantidadActual = 0;
+          }
+        }
+
+        return {
+          ...producto,
+          cantidad_actual: cantidadActual,
+          inventario_autoritativo: "fisico",
+          diagnostico_fila_hijo:
+            esDerivado && Number(producto.cantidad_legacy_hijo || 0) !== 0
+              ? `Fila legacy no autoritativa: ${producto.cantidad_legacy_hijo}`
+              : null,
+        };
+      });
+
+      res.json(productos);
     }
   );
 };
@@ -282,68 +327,50 @@ const crearTraspaso = (req, res) => {
         return rollback("Producto o cantidad inválida");
       }
 
-      db.get(
-        `
-        SELECT *
-        FROM productos
-        WHERE id = ?
-        AND activo = 1
-        `,
-        [productoId],
-        (errorProducto, producto) => {
-          if (errorProducto) {
-            return rollback("Error al consultar producto");
+      resolverMovimiento(productoId, cantidad, {}, (errorImpacto, impacto) => {
+          if (errorImpacto) {
+            return rollback(errorImpacto.message);
           }
 
-          if (!producto) {
-            return rollback("Producto no encontrado");
-          }
-
-          const errorCantidad = validarCantidadProducto(producto, cantidad);
+          const errorCantidad = validarCantidadProducto(
+            impacto.producto,
+            cantidad
+          );
 
           if (errorCantidad) {
             return rollback(errorCantidad);
           }
 
-          const productoInventarioId =
-            Number(producto.es_derivado || 0) === 1
-              ? producto.producto_padre_id
-              : producto.id;
-
-          const cantidadInventario =
-            Number(producto.es_derivado || 0) === 1
-              ? cantidad * Number(producto.factor_conversion || 1)
-              : cantidad;
-
-          db.get(
-            `
-            SELECT cantidad_actual
-            FROM inventario
-            WHERE tienda_id = ?
-            AND producto_id = ?
-            `,
-            [tienda_origen_id, productoInventarioId],
+          consultarSaldo(
+            tienda_origen_id,
+            impacto.producto_fisico_id,
             (errorInventario, inventario) => {
               if (errorInventario) {
                 return rollback("Error al consultar inventario");
               }
 
-              if (!inventario || Number(inventario.cantidad_actual) < cantidadInventario) {
-                return rollback(`Inventario insuficiente para ${producto.nombre}`);
+              if (
+                !inventario ||
+                Number(inventario.cantidad_actual) + 1e-9 <
+                  Number(impacto.cantidad_fisica)
+              ) {
+                return rollback(
+                  `Inventario insuficiente para ${impacto.producto_comercial_nombre}`
+                );
               }
 
               detallesValidados.push({
-                producto_id: producto.id,
-                producto_inventario_id: productoInventarioId,
+                producto_id: impacto.producto_comercial_id,
+                producto_inventario_id: impacto.producto_fisico_id,
                 cantidad,
-                cantidad_inventario: cantidadInventario,
+                cantidad_inventario: impacto.cantidad_fisica,
+                impacto,
               });
 
               validarProducto(index + 1);
             }
           );
-        }
-      );
+        });
     };
 
     const guardarTraspaso = () => {
@@ -412,23 +439,12 @@ const crearTraspaso = (req, res) => {
             return rollback("Error al guardar detalle de traspaso");
           }
 
-          db.run(
-            `
-            UPDATE inventario
-            SET
-              cantidad_actual = cantidad_actual - ?,
-              ultima_actualizacion = CURRENT_TIMESTAMP
-            WHERE tienda_id = ?
-            AND producto_id = ?
-            `,
-            [
-              detalle.cantidad_inventario,
-              tienda_origen_id,
-              detalle.producto_inventario_id,
-            ],
+          descontarInventario(
+            tienda_origen_id,
+            detalle.impacto,
             (errorDescuento) => {
               if (errorDescuento) {
-                return rollback("Error al descontar inventario origen");
+                return rollback(errorDescuento.message || "Error al descontar inventario origen");
               }
 
               guardarDetalles(traspasoId, index + 1);
@@ -488,8 +504,6 @@ const recibirTraspaso = (req, res) => {
           }
 
           db.serialize(() => {
-            db.run("BEGIN TRANSACTION");
-
             const rollback = (mensaje) => {
               db.run("ROLLBACK", () => {
                 return res.status(400).json({ error: mensaje });
@@ -504,12 +518,16 @@ const recibirTraspaso = (req, res) => {
                   SET
                     estado = 'recibido',
                     fecha_recepcion = CURRENT_TIMESTAMP
-                  WHERE id = ?
+                  WHERE id = ? AND estado = 'enviado'
                   `,
                   [id],
-                  (errorUpdate) => {
+                  function (errorUpdate) {
                     if (errorUpdate) {
                       return rollback("Error al actualizar estado del traspaso");
+                    }
+
+                    if (this.changes !== 1) {
+                      return rollback("El traspaso ya no esta disponible para recibir");
                     }
 
                     db.run("COMMIT", (errorCommit) => {
@@ -529,45 +547,37 @@ const recibirTraspaso = (req, res) => {
 
               const detalle = detalles[index];
 
-              const productoInventarioId =
-                Number(detalle.es_derivado || 0) === 1
-                  ? detalle.producto_padre_id
-                  : detalle.producto_id;
+              resolverMovimiento(
+                detalle.producto_id,
+                detalle.cantidad,
+                { permitirInactivo: true },
+                (errorImpacto, impacto) => {
+                  if (errorImpacto) return rollback(errorImpacto.message);
 
-              const cantidadInventario =
-                Number(detalle.es_derivado || 0) === 1
-                  ? Number(detalle.cantidad) * Number(detalle.factor_conversion || 1)
-                  : Number(detalle.cantidad);
+                  sumarInventario(
+                    traspaso.tienda_destino_id,
+                    impacto,
+                    (errorInventario) => {
+                      if (errorInventario) {
+                        return rollback("Error al sumar inventario destino");
+                      }
 
-              db.run(
-                `
-                INSERT INTO inventario (
-                  tienda_id,
-                  producto_id,
-                  cantidad_actual
-                )
-                VALUES (?, ?, ?)
-                ON CONFLICT(tienda_id, producto_id)
-                DO UPDATE SET
-                  cantidad_actual = cantidad_actual + excluded.cantidad_actual,
-                  ultima_actualizacion = CURRENT_TIMESTAMP
-                `,
-                [
-                  traspaso.tienda_destino_id,
-                  productoInventarioId,
-                  cantidadInventario,
-                ],
-                (errorInventario) => {
-                  if (errorInventario) {
-                    return rollback("Error al sumar inventario destino");
-                  }
-
-                  sumarDetalle(index + 1);
+                      sumarDetalle(index + 1);
+                    }
+                  );
                 }
               );
             };
 
-            sumarDetalle(0);
+            db.run("BEGIN IMMEDIATE TRANSACTION", (errorInicio) => {
+              if (errorInicio) {
+                return res.status(409).json({
+                  error: "Hay otra operacion de traspaso en proceso",
+                });
+              }
+
+              sumarDetalle(0);
+            });
           });
         }
       );
@@ -623,8 +633,6 @@ const cancelarTraspaso = (req, res) => {
           }
 
           db.serialize(() => {
-            db.run("BEGIN TRANSACTION");
-
             const rollback = (mensaje) => {
               db.run("ROLLBACK", () => {
                 return res.status(400).json({ error: mensaje });
@@ -637,12 +645,16 @@ const cancelarTraspaso = (req, res) => {
                   `
                   UPDATE traspasos
                   SET estado = 'cancelado'
-                  WHERE id = ?
+                  WHERE id = ? AND estado = 'enviado'
                   `,
                   [id],
-                  (errorUpdate) => {
+                  function (errorUpdate) {
                     if (errorUpdate) {
                       return rollback("Error al cancelar traspaso");
+                    }
+
+                    if (this.changes !== 1) {
+                      return rollback("El traspaso ya no esta disponible para cancelar");
                     }
 
                     db.run("COMMIT", (errorCommit) => {
@@ -662,41 +674,37 @@ const cancelarTraspaso = (req, res) => {
 
               const detalle = detalles[index];
 
-              const productoInventarioId =
-                Number(detalle.es_derivado || 0) === 1
-                  ? detalle.producto_padre_id
-                  : detalle.producto_id;
+              resolverMovimiento(
+                detalle.producto_id,
+                detalle.cantidad,
+                { permitirInactivo: true },
+                (errorImpacto, impacto) => {
+                  if (errorImpacto) return rollback(errorImpacto.message);
 
-              const cantidadInventario =
-                Number(detalle.es_derivado || 0) === 1
-                  ? Number(detalle.cantidad) * Number(detalle.factor_conversion || 1)
-                  : Number(detalle.cantidad);
+                  sumarInventario(
+                    traspaso.tienda_origen_id,
+                    impacto,
+                    (errorInventario) => {
+                      if (errorInventario) {
+                        return rollback("Error al regresar inventario origen");
+                      }
 
-              db.run(
-                `
-                UPDATE inventario
-                SET
-                  cantidad_actual = cantidad_actual + ?,
-                  ultima_actualizacion = CURRENT_TIMESTAMP
-                WHERE tienda_id = ?
-                AND producto_id = ?
-                `,
-                [
-                  cantidadInventario,
-                  traspaso.tienda_origen_id,
-                  productoInventarioId,
-                ],
-                (errorInventario) => {
-                  if (errorInventario) {
-                    return rollback("Error al regresar inventario origen");
-                  }
-
-                  regresarDetalle(index + 1);
+                      regresarDetalle(index + 1);
+                    }
+                  );
                 }
               );
             };
 
-            regresarDetalle(0);
+            db.run("BEGIN IMMEDIATE TRANSACTION", (errorInicio) => {
+              if (errorInicio) {
+                return res.status(409).json({
+                  error: "Hay otra operacion de traspaso en proceso",
+                });
+              }
+
+              regresarDetalle(0);
+            });
           });
         }
       );

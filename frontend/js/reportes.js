@@ -28,7 +28,13 @@ const indicadorMontoImportes = document.getElementById("indicadorMontoImportes")
 const indicadorTraspasos = document.getElementById("indicadorTraspasos");
 
 const tablaBajoInventario = document.getElementById("tablaBajoInventario");
-const tablaFiadosPendientes = document.getElementById("tablaFiadosPendientes");
+const tablaCuentasPorCobrar = document.getElementById("tablaCuentasPorCobrar");
+const tablaSaldosAFavor = document.getElementById("tablaSaldosAFavor");
+const carteraAlcance = document.getElementById("carteraAlcance");
+const carteraTotalPorCobrar = document.getElementById("carteraTotalPorCobrar");
+const carteraTotalCreditos = document.getElementById("carteraTotalCreditos");
+const carteraEtiquetaNeto = document.getElementById("carteraEtiquetaNeto");
+const carteraSaldoNeto = document.getElementById("carteraSaldoNeto");
 const leyendaMetodosPago = document.getElementById("leyendaMetodosPago");
 
 const colores = [
@@ -127,7 +133,14 @@ async function cargarReportes() {
     dibujarGraficaMetodosPago(data.metodos_pago || []);
     dibujarGraficaTopProductos(data.top_productos || []);
     renderBajoInventario(data.bajo_inventario || []);
-    renderFiadosPendientes(data.fiados_pendientes || []);
+    renderCartera(
+      data.cartera || {
+        alcance: "global",
+        descripcion_alcance: "Saldo global actual de clientes.",
+        cuentas_por_cobrar: data.fiados_pendientes || [],
+        saldos_a_favor: [],
+      }
+    );
 
     mostrarMensaje("Reportes actualizados.");
   } catch (error) {
@@ -177,25 +190,103 @@ function renderBajoInventario(items) {
   }
 }
 
-function renderFiadosPendientes(items) {
-  tablaFiadosPendientes.innerHTML = "";
+function renderCartera(cartera) {
+  const cuentasPorCobrar = cartera.cuentas_por_cobrar || [];
+  const saldosAFavor = cartera.saldos_a_favor || [];
+  const totalPorCobrar = Math.max(
+    0,
+    Number(
+      cartera.total_cuentas_por_cobrar ??
+        cuentasPorCobrar.reduce(
+          (total, item) =>
+            total + Number(item.saldo_deudor ?? item.deuda_total ?? 0),
+          0
+        )
+    ) || 0
+  );
+  const totalCreditos = Math.max(
+    0,
+    Number(
+      cartera.total_saldos_a_favor ??
+        saldosAFavor.reduce(
+          (total, item) => total + Number(item.saldo_a_favor || 0),
+          0
+        )
+    ) || 0
+  );
+  const saldoNeto = Number(
+    cartera.saldo_neto_cartera ?? totalPorCobrar - totalCreditos
+  ) || 0;
+
+  carteraTotalPorCobrar.textContent = formatearDinero(totalPorCobrar);
+  carteraTotalCreditos.textContent = formatearDinero(totalCreditos);
+  carteraSaldoNeto.textContent = formatearDinero(Math.abs(saldoNeto));
+  carteraAlcance.textContent = cartera.descripcion_alcance ||
+    (cartera.alcance === "tienda"
+      ? "Deudas y abonos atribuidos a la tienda seleccionada."
+      : "Saldo global actual de clientes considerando todas las tiendas.");
+
+  if (saldoNeto < 0) {
+    carteraEtiquetaNeto.textContent = "Crédito neto de clientes";
+    carteraSaldoNeto.className = "text-3xl font-black text-green-300 mt-2";
+  } else {
+    carteraEtiquetaNeto.textContent = "Saldo neto por cobrar";
+    carteraSaldoNeto.className = "text-3xl font-black text-cyan-300 mt-2";
+  }
+
+  renderCuentasPorCobrar(cuentasPorCobrar);
+  renderSaldosAFavor(saldosAFavor);
+}
+
+function renderCuentasPorCobrar(items) {
+  tablaCuentasPorCobrar.innerHTML = "";
 
   items.forEach((item) => {
     const tr = document.createElement("tr");
+    const saldoDeudor = Math.max(
+      0,
+      Number(item.saldo_deudor ?? item.deuda_total ?? 0) || 0
+    );
 
     tr.innerHTML = `
       <td class="p-3 font-bold">${item.nombre_completo}</td>
-      <td class="p-3 text-red-300 font-black">${formatearDinero(item.deuda_total)}</td>
+      <td class="p-3 text-red-300 font-black">${formatearDinero(saldoDeudor)}</td>
     `;
 
-    tablaFiadosPendientes.appendChild(tr);
+    tablaCuentasPorCobrar.appendChild(tr);
   });
 
   if (items.length === 0) {
-    tablaFiadosPendientes.innerHTML = `
+    tablaCuentasPorCobrar.innerHTML = `
       <tr>
         <td colspan="2" class="p-6 text-center text-zinc-500">
-          Sin fiados pendientes.
+          Sin cuentas por cobrar.
+        </td>
+      </tr>
+    `;
+  }
+}
+
+function renderSaldosAFavor(items) {
+  tablaSaldosAFavor.innerHTML = "";
+
+  items.forEach((item) => {
+    const tr = document.createElement("tr");
+    const saldoAFavor = Math.max(0, Number(item.saldo_a_favor || 0) || 0);
+
+    tr.innerHTML = `
+      <td class="p-3 font-bold">${item.nombre_completo}</td>
+      <td class="p-3 text-green-300 font-black">${formatearDinero(saldoAFavor)}</td>
+    `;
+
+    tablaSaldosAFavor.appendChild(tr);
+  });
+
+  if (items.length === 0) {
+    tablaSaldosAFavor.innerHTML = `
+      <tr>
+        <td colspan="2" class="p-6 text-center text-zinc-500">
+          Sin saldos a favor.
         </td>
       </tr>
     `;

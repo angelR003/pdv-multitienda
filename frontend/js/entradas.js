@@ -53,7 +53,10 @@ async function cargarProductos() {
       },
     });
 
-    productos = await response.json();
+    const productosRecibidos = await response.json();
+    productos = Array.isArray(productosRecibidos)
+      ? productosRecibidos
+      : [];
 
     renderSelectProductos(productos);
     actualizarCampoCantidad();
@@ -123,6 +126,13 @@ async function registrarEntrada() {
 
   if (!productoSeleccionado) {
     mostrarMensaje("Selecciona un producto.");
+    return;
+  }
+
+  if (Number(productoSeleccionado.es_derivado || 0) === 1) {
+    mostrarMensaje(
+      `Registra la entrada en ${productoSeleccionado.producto_padre_nombre || "el producto padre"}.`
+    );
     return;
   }
 
@@ -221,15 +231,21 @@ function renderSelectProductos(lista) {
 
     option.value = item.id;
     option.dataset.unidad = item.unidad;
-
-    option.textContent = `${item.nombre} - ${item.presentacion || item.unidad}`;
+    const esDerivado = Number(item.es_derivado || 0) === 1;
+    option.disabled = esDerivado;
+    option.textContent = esDerivado
+      ? `${item.nombre} — derivado; gestionar ${item.producto_padre_nombre || "producto padre"}`
+      : `${item.nombre} - ${item.presentacion || item.unidad}`;
 
     producto.appendChild(option);
   });
 
   actualizarCampoCantidad();
-  if (productos.length > 0 && !buscarProductoEntrada.value) {
-    seleccionarProductoEntrada(productos[0], false);
+  const primerProductoFisico = productos.find(
+    (item) => Number(item.es_derivado || 0) === 0
+  );
+  if (primerProductoFisico && !buscarProductoEntrada.value) {
+    seleccionarProductoEntrada(primerProductoFisico, false);
   }
 }
 
@@ -282,14 +298,23 @@ function renderResultadosProductoEntrada() {
   filtrados.forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
+    const esDerivado = Number(item.es_derivado || 0) === 1;
+    button.disabled = esDerivado;
     button.className = "w-full text-left px-4 py-3 hover:bg-zinc-900 border-b border-zinc-800 last:border-b-0";
     button.innerHTML = `
       <div class="font-black">${item.nombre}</div>
       <div class="text-xs text-zinc-500">
         ${item.codigo_barras || "Sin codigo"}${item.marca ? ` - ${item.marca}` : ""}${item.categoria ? ` - ${item.categoria}` : ""}${item.presentacion ? ` - ${item.presentacion}` : ""}
       </div>
+      ${
+        esDerivado
+          ? `<div class="text-xs text-amber-300 mt-1">Derivado: registra la entrada en ${item.producto_padre_nombre || "el producto padre"}</div>`
+          : ""
+      }
     `;
-    button.addEventListener("click", () => seleccionarProductoEntrada(item));
+    if (!esDerivado) {
+      button.addEventListener("click", () => seleccionarProductoEntrada(item));
+    }
     resultadosProductoEntrada.appendChild(button);
   });
 
