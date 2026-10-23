@@ -1,0 +1,53 @@
+name: Publicar prototipo movil
+
+on:
+  push:
+    branches:
+      - main
+      - codex/prototipo-movil-pwa-etapa-1
+    paths:
+      - "frontend/movil/**"
+      - "frontend/assets/gardenia.png"
+      - ".github/workflows/mobile-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Preparar sitio estatico
+        shell: bash
+        run: |
+          mkdir -p _site/movil _site/assets
+          cp -R frontend/movil/. _site/movil/
+          cp frontend/assets/gardenia.png _site/assets/gardenia.png
+          printf '%s\n' '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=movil/login.html"><title>PDV Las Gardenias</title></head><body><a href="movil/login.html">Abrir prototipo móvil</a></body></html>' > _site/index.html
+          touch _site/.nojekyll
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Empaquetar sitio
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Publicar
+        id: deployment
+        uses: actions/deploy-pages@v4
