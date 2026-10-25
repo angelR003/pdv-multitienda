@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_VERSION = "pdv-gardenias-v2";
+const CACHE_VERSION = "pdv-gardenias-v3";
 const APP_SHELL = [
   "./",
   "./login.html",
@@ -63,12 +63,12 @@ self.addEventListener("fetch", event => {
   }
 
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+    fetch(event.request).then(response => {
         if (response.ok) {
           const copy = response.clone();
           caches.open(CACHE_VERSION).then(cache => cache.put(event.request, copy));
         }
         return response;
-      }))
+      }).catch(() => caches.match(event.request))
   );
 });
