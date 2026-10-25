@@ -3,6 +3,40 @@
 
   const screen = document.body.dataset.screen || "dashboard";
   const app = document.querySelector("#app");
+  const terminalStorageKey = "pdv-las-gardenias:terminal:v1";
+  let deferredInstallPrompt = null;
+
+  const ensurePwaMetadata = () => {
+    const links = [
+      ["manifest", "manifest.webmanifest", ""],
+      ["icon", "icons/icon-192.jpg", "192x192"],
+      ["apple-touch-icon", "icons/icon-180.png", "180x180"]
+    ];
+    links.forEach(([rel, href, sizes]) => {
+      if (document.head.querySelector(`link[rel="${rel}"]`)) return;
+      const link = document.createElement("link");
+      link.rel = rel;
+      link.href = href;
+      if (sizes) link.sizes = sizes;
+      document.head.append(link);
+    });
+    [
+      ["application-name", "PDV Las Gardenias"],
+      ["mobile-web-app-capable", "yes"],
+      ["apple-mobile-web-app-capable", "yes"],
+      ["apple-mobile-web-app-status-bar-style", "black-translucent"],
+      ["apple-mobile-web-app-title", "PDV Gardenias"]
+    ].forEach(([name, content]) => {
+      if (document.head.querySelector(`meta[name="${name}"]`)) return;
+      const meta = document.createElement("meta");
+      meta.name = name;
+      meta.content = content;
+      document.head.append(meta);
+    });
+    if (screen === "login") document.title = "Acceso · PDV Las Gardenias";
+  };
+
+  ensurePwaMetadata();
 
   const routes = {
     ventas: "index.html",
@@ -51,7 +85,7 @@
   };
 
   const prototypeNote = () => `
-    <div class="prototype-note"><span aria-hidden="true">◇</span><span><strong>Prototipo navegable.</strong> Datos de ejemplo; no se guardan cambios.</span></div>`;
+    <div class="prototype-note"><span aria-hidden="true">◇</span><span><strong>Modo de prueba.</strong> Los registros son ilustrativos y las operaciones permanecen deshabilitadas.</span></div>`;
 
   const topbar = (title, subtitle, back = "dashboard.html", action = "") => `
     <header class="topbar">
@@ -68,7 +102,7 @@
     </nav>`;
 
   const layout = (content, options = {}) => {
-    const meta = screenMeta[screen] || ["PDV Las Gardenias", "Demostración móvil"];
+    const meta = screenMeta[screen] || ["PDV Las Gardenias", "Aplicación móvil"];
     const active = options.active || (screen === "ventas" ? "ventas" : screen.includes("venta") || screen === "historial" ? "historial" : "menu");
     return `<div class="shell">${topbar(meta[0], meta[1], options.back ?? "dashboard.html", options.action || "")}<main class="page">${content}</main>${bottomNav(active)}</div>`;
   };
@@ -76,7 +110,7 @@
   const dialog = (id, title, content, footer = "") => `
     <div class="dialog-backdrop" id="${id}" aria-hidden="true">
       <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="${id}-title">
-        <div class="dialog-head"><div><p class="eyebrow">Demostración</p><h2 id="${id}-title">${title}</h2></div><button type="button" class="icon-button dialog-close" data-close aria-label="Cerrar diálogo">×</button></div>
+        <div class="dialog-head"><div><p class="eyebrow">Vista previa</p><h2 id="${id}-title">${title}</h2></div><button type="button" class="icon-button dialog-close" data-close aria-label="Cerrar diálogo">×</button></div>
         <div class="stack">${content}</div>${footer ? `<div class="separator"></div><div class="button-row">${footer}</div>` : ""}
       </section>
     </div>`;
@@ -89,25 +123,31 @@
   function loginPage() {
     return `<main class="login-shell"><section class="login-card">
       <div class="brand"><img src="../assets/gardenia.png" alt="Gardenia"><div><p class="eyebrow">PDV móvil</p><h1>Las Gardenias</h1></div></div>
-      <span class="demo-label">Etapa 1 · Demostración</span>
-      <p class="muted" style="margin:10px 0 22px">Recorre el prototipo sin usuario, contraseña ni conexión al sistema real.</p>
+      <span class="demo-label">Aplicación instalable</span>
+      <p class="muted" style="margin:10px 0 22px">Explora la interfaz sin usuario, contraseña ni conexión al sistema real.</p>
       <div class="stack">${field("Usuario", "No requerido")} ${field("Contraseña", "No requerida", "password")}</div>
-      <a class="button full" href="dashboard.html" style="margin-top:18px">Entrar a la demostración →</a>
+      <a class="button full" href="dashboard.html" style="margin-top:18px">Entrar →</a>
       <a class="button secondary full" href="config-terminal.html" style="margin-top:10px">Configurar terminal</a>
+      <section class="install-panel" aria-labelledby="install-title">
+        <div><h2 id="install-title">Instalar en este dispositivo</h2><p class="small muted" id="pwa-status">Comprobando compatibilidad…</p></div>
+        <button type="button" class="button full" id="pwa-install" hidden>Instalar aplicación</button>
+        <button type="button" class="button secondary full" data-open="dlg-install">Cómo agregarla a inicio</button>
+      </section>
       <p class="small muted" style="margin-top:18px;text-align:center">Los datos mostrados son ficticios y están identificados como ejemplo.</p>
-    </section></main>`;
+    </section>${dialog("dlg-install", "Agregar a la pantalla de inicio", `<div class="install-steps"><p><strong>Android · Chrome</strong><br>Abre el menú ⋮ y elige <em>Instalar aplicación</em> o <em>Agregar a pantalla principal</em>.</p><p><strong>iPhone · Safari</strong><br>Toca Compartir y después <em>Agregar a inicio</em>.</p><p class="muted small">Una vez instalada, la interfaz y la configuración de terminal quedan disponibles en el almacenamiento privado de la aplicación.</p></div>`, `<button class="button full" data-close>Entendido</button>`)}</main>`;
   }
 
   function configPage() {
-    const content = `<div class="hero"><p class="eyebrow">Preparación inicial</p><h1>Configura esta terminal</h1><p class="muted">Vista demostrativa de la sucursal que usaría el dispositivo.</p></div>${prototypeNote()}
-      <section class="card stack">
-        <div class="field"><label>Sucursal</label><select><option>Las Gardenias Centro · Ejemplo</option><option>Las Gardenias Norte · Ejemplo</option></select></div>
-        ${field("Nombre de terminal", "Caja móvil 01")}
-        <div class="field"><label>Uso principal</label><select><option>Venta y consulta</option><option>Solo consulta</option></select></div>
-        ${pendingButton("Guardar configuración", "full")}
+    const content = `<div class="hero"><p class="eyebrow">Preparación inicial</p><h1>Configura esta terminal</h1><p class="muted">Esta preferencia se guarda únicamente en este dispositivo.</p></div>${prototypeNote()}
+      <form class="card stack" id="terminal-form">
+        <div class="field"><label for="terminal-branch">Sucursal</label><select id="terminal-branch" name="branch"><option value="centro">Las Gardenias Centro · Ejemplo</option><option value="norte">Las Gardenias Norte · Ejemplo</option></select></div>
+        <div class="field"><label for="terminal-name">Nombre de terminal</label><input class="input" id="terminal-name" name="name" maxlength="40" placeholder="Caja móvil 01"></div>
+        <div class="field"><label for="terminal-use">Uso principal</label><select id="terminal-use" name="usage"><option value="ventas">Venta y consulta</option><option value="consulta">Solo consulta</option></select></div>
+        <button type="submit" class="button full">Guardar en este dispositivo</button>
+        <p class="storage-status small" id="terminal-status" role="status" aria-live="polite">Aún no hay una configuración guardada.</p>
         <a class="button secondary full" href="dashboard.html">Continuar sin guardar</a>
-      </section>`;
-    return `<div class="shell">${topbar("Configurar terminal", "Demostración", "login.html", `<span class="icon-button placeholder"></span>`)}<main class="page">${content}</main></div>`;
+      </form>`;
+    return `<div class="shell">${topbar("Configurar terminal", "Este dispositivo", "login.html", `<span class="icon-button placeholder"></span>`)}<main class="page">${content}</main></div>`;
   }
 
   function dashboardPage() {
@@ -244,6 +284,93 @@
   };
 
   app.innerHTML = (renderers[screen] || dashboardPage)();
+
+  const isInstalled = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+
+  const updateInstallUi = () => {
+    const installButton = document.querySelector("#pwa-install");
+    const status = document.querySelector("#pwa-status");
+    if (!status) return;
+    if (isInstalled()) {
+      status.textContent = "La aplicación ya está abierta en modo instalado.";
+      if (installButton) installButton.hidden = true;
+    } else if (deferredInstallPrompt) {
+      status.textContent = "Lista para instalar y usar desde la pantalla de inicio.";
+      if (installButton) installButton.hidden = false;
+    } else {
+      status.textContent = "Puedes agregarla desde el menú de Chrome o Compartir en Safari.";
+      if (installButton) installButton.hidden = true;
+    }
+  };
+
+  const setupPwa = () => {
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js").catch(error => console.warn("No se pudo activar el modo sin conexión.", error));
+      });
+    }
+
+    window.addEventListener("beforeinstallprompt", event => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      updateInstallUi();
+    });
+
+    window.addEventListener("appinstalled", () => {
+      deferredInstallPrompt = null;
+      updateInstallUi();
+    });
+
+    document.querySelector("#pwa-install")?.addEventListener("click", async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      updateInstallUi();
+    });
+
+    updateInstallUi();
+  };
+
+  const setupTerminalStorage = () => {
+    const form = document.querySelector("#terminal-form");
+    if (!form) return;
+    const status = document.querySelector("#terminal-status");
+    try {
+      const saved = JSON.parse(localStorage.getItem(terminalStorageKey) || "null");
+      if (saved) {
+        form.elements.branch.value = saved.branch || "centro";
+        form.elements.name.value = saved.name || "";
+        form.elements.usage.value = saved.usage || "ventas";
+        status.textContent = `Configuración local guardada: ${saved.name || "Terminal sin nombre"}.`;
+        status.classList.add("saved");
+      }
+    } catch {
+      localStorage.removeItem(terminalStorageKey);
+    }
+
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      const terminal = {
+        branch: form.elements.branch.value,
+        name: form.elements.name.value.trim() || "Caja móvil 01",
+        usage: form.elements.usage.value,
+        updatedAt: new Date().toISOString()
+      };
+      try {
+        localStorage.setItem(terminalStorageKey, JSON.stringify(terminal));
+        form.elements.name.value = terminal.name;
+        status.textContent = `Guardado en este dispositivo: ${terminal.name}.`;
+        status.classList.add("saved");
+      } catch {
+        status.textContent = "El navegador no permitió guardar la configuración local.";
+        status.classList.remove("saved");
+      }
+    });
+  };
+
+  setupPwa();
+  setupTerminalStorage();
 
   let opener = null;
   const closeDialog = (backdrop) => {

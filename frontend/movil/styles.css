@@ -274,6 +274,11 @@ body.dialog-open { overflow: hidden; }
 .empty-space { height: 8px; }
 .separator { height: 1px; margin: 16px 0; background: var(--line); }
 .demo-label { color: var(--yellow); font-size: .73rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.install-panel { display: grid; gap: 10px; margin-top: 18px; padding: 15px; border: 1px solid rgba(53,208,127,.28); border-radius: 18px; background: rgba(53,208,127,.07); }
+.install-panel h2 { margin-bottom: 3px; font-size: 1rem; }
+.install-steps { display: grid; gap: 16px; }
+.storage-status { min-height: 22px; color: var(--muted); text-align: center; }
+.storage-status.saved { color: #7ce7aa; }
 
 @media (min-width: 600px) {
   .page { padding-right: 24px; padding-left: 24px; }

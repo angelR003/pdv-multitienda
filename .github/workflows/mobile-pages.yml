@@ -1,4 +1,4 @@
-name: Publicar prototipo movil
+name: Publicar PWA movil
 
 on:
   push:
@@ -37,7 +37,7 @@ jobs:
           mkdir -p _site/movil _site/assets
           cp -R frontend/movil/. _site/movil/
           cp frontend/assets/gardenia.png _site/assets/gardenia.png
-          printf '%s\n' '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=movil/login.html"><title>PDV Las Gardenias</title></head><body><a href="movil/login.html">Abrir prototipo móvil</a></body></html>' > _site/index.html
+          printf '%s\n' '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=movil/login.html"><title>PDV Las Gardenias</title></head><body><a href="movil/login.html">Abrir aplicación móvil</a></body></html>' > _site/index.html
           touch _site/.nojekyll
 
       - name: Configurar GitHub Pages
