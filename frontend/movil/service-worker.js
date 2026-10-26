@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_VERSION = "pdv-gardenias-v5";
+const CACHE_VERSION = "pdv-gardenias-v6";
 const APP_SHELL = [
   "./",
   "./login.html",
@@ -24,6 +24,7 @@ const APP_SHELL = [
   "./config-terminal.html",
   "./styles.css?v=5",
   "./db.js?v=5",
+  "./business-rules.js?v=6",
   "./app.js?v=5",
   "./manifest.webmanifest",
   "./icons/icon-180.png",
@@ -73,3 +74,4 @@ self.addEventListener("fetch", event => {
       }).catch(() => caches.match(event.request))
   );
 });
+
