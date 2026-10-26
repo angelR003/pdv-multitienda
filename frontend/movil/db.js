@@ -221,6 +221,52 @@
     return record;
   };
 
+  const batch = async (operations, options = {}) => {
+    if (!Array.isArray(operations) || operations.length === 0) return [];
+    operations.forEach(operation => assertBusinessStore(operation.store));
+    const database = await open();
+    const storeNames = [...new Set(operations.map(operation => operation.store))];
+    const transaction = database.transaction([...storeNames, "_meta", "_outbox"], "readwrite");
+    const deviceMeta = await requestResult(transaction.objectStore("_meta").get("device_id"));
+    const records = [];
+
+    for (const operation of operations) {
+      const store = transaction.objectStore(operation.store);
+      const payload = operation.payload || {};
+      const existing = payload.id ? await requestResult(store.get(payload.id)) : null;
+      const record = baseRecord({
+        ...existing,
+        ...payload,
+        version: existing ? Number(existing.version || 0) + 1 : Number(payload.version || 1)
+      }, deviceMeta.value, {
+        ...options,
+        ...operation.options,
+        operationId: undefined
+      });
+      store.put(record);
+      records.push(record);
+
+      if (operation.options?.queue !== false && options.queue !== false && !record.is_demo) {
+        const timestamp = new Date().toISOString();
+        transaction.objectStore("_outbox").put({
+          operation_id: operation.operationId || uuid(),
+          entity: operation.store,
+          record_id: record.id,
+          action: record.deleted_at ? "delete" : existing ? "update" : "create",
+          base_version: existing?.version || 0,
+          payload: record,
+          status: "pending",
+          attempts: 0,
+          created_at: timestamp,
+          updated_at: timestamp
+        });
+      }
+    }
+
+    await transactionDone(transaction);
+    return records;
+  };
+
   const remove = async (storeName, id, options = {}) => {
     const record = await get(storeName, id);
     if (!record) return null;
@@ -289,6 +335,7 @@
     get,
     list,
     save,
+    batch,
     remove,
     getMeta,
     setMeta,

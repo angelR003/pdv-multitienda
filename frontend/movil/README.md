@@ -27,8 +27,9 @@ principal e `index.html` conserva la pantalla de venta.
 - `service-worker.js` almacena la interfaz para poder abrirla sin conexión.
 - `db.js` crea 34 almacenes de dominio equivalentes al esquema SQLite, además de
   metadatos, bandeja de sincronización y registro de conflictos.
-- `business-rules.js` concentra las validaciones puras compartidas que aplicarán
-  los módulos móviles. El contrato funcional está en
+- `business-rules.js` concentra las validaciones puras compartidas por los
+  módulos móviles. `modules.js` conecta las 14 áreas operativas con IndexedDB.
+  El contrato funcional está en
   [`docs/REGLAS-NEGOCIO-PWA.md`](../../docs/REGLAS-NEGOCIO-PWA.md).
 - Cada registro móvil utiliza UUID, versión, dispositivo de origen, borrado lógico
   y estado de sincronización; `legacy_id` queda reservado para relacionarlo con
@@ -38,8 +39,9 @@ principal e `index.html` conserva la pantalla de venta.
 - La pantalla de configuración permite solicitar almacenamiento persistente y
   exportar un respaldo JSON de esta instalación.
 - La base SQLite real de la computadora nunca se incluye en los archivos públicos.
-- Los registros operativos siguen siendo datos ilustrativos y sus acciones
-  permanecen deshabilitadas hasta la etapa de lógica de negocio.
+- Los tres productos, las dos tiendas y el usuario creados al iniciar están
+  marcados como muestras. Las altas y operaciones posteriores son datos locales
+  reales; se conservan al actualizar la PWA y pueden exportarse como respaldo.
 
 ## Publicación
 
