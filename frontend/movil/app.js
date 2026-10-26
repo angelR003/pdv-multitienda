@@ -138,7 +138,7 @@
   }
 
   function configPage() {
-    const content = `<div class="hero"><p class="eyebrow">Preparación inicial</p><h1>Configura esta terminal</h1><p class="muted">Esta preferencia se guarda únicamente en este dispositivo.</p></div>${prototypeNote()}
+    const content = `<div class="hero"><p class="eyebrow">Preparación inicial</p><h1>Configura esta terminal</h1><p class="muted">La configuración y la base operativa se guardan únicamente en este dispositivo.</p></div>
       <form class="card stack" id="terminal-form">
         <div class="field"><label for="terminal-branch">Sucursal</label><select id="terminal-branch" name="branch"><option value="centro">Las Gardenias Centro · Ejemplo</option><option value="norte">Las Gardenias Norte · Ejemplo</option></select></div>
         <div class="field"><label for="terminal-name">Nombre de terminal</label><input class="input" id="terminal-name" name="name" maxlength="40" placeholder="Caja móvil 01"></div>
@@ -146,7 +146,15 @@
         <button type="submit" class="button full">Guardar en este dispositivo</button>
         <p class="storage-status small" id="terminal-status" role="status" aria-live="polite">Aún no hay una configuración guardada.</p>
         <a class="button secondary full" href="dashboard.html">Continuar sin guardar</a>
-      </form>`;
+      </form>
+      <section class="card stack" aria-labelledby="database-title">
+        <div class="card-head"><div><p class="eyebrow">Almacenamiento local</p><h2 id="database-title">Base de datos del teléfono</h2></div><span class="badge info" id="database-badge">Iniciando</span></div>
+        <p class="muted small">IndexedDB guarda los registros dentro del espacio privado de esta PWA. La estructura corresponde a SQLite, pero utiliza identificadores globales para sincronizar sin duplicados más adelante.</p>
+        <div class="database-stats" id="database-details" aria-live="polite"><span>Preparando almacenes…</span></div>
+        <p class="storage-status small" id="database-status" role="status" aria-live="polite">Comprobando la base local.</p>
+        <div class="button-row"><button type="button" class="button secondary" id="database-persist">Proteger almacenamiento</button><button type="button" class="button secondary" id="database-export">Exportar respaldo</button></div>
+        <p class="muted micro">El respaldo es JSON y contiene solamente los datos guardados en esta instalación. La base SQLite de la computadora no se publica ni se copia automáticamente.</p>
+      </section>`;
     return `<div class="shell">${topbar("Configurar terminal", "Este dispositivo", "login.html", `<span class="icon-button placeholder"></span>`)}<main class="page">${content}</main></div>`;
   }
 
@@ -359,6 +367,7 @@
       };
       try {
         localStorage.setItem(terminalStorageKey, JSON.stringify(terminal));
+        globalThis.PdvLocalDB?.setMeta("terminal", terminal).catch(() => {});
         form.elements.name.value = terminal.name;
         status.textContent = `Guardado en este dispositivo: ${terminal.name}.`;
         status.classList.add("saved");
@@ -369,8 +378,77 @@
     });
   };
 
+  const formatBytes = value => {
+    if (!Number.isFinite(value) || value <= 0) return "Sin uso medible";
+    if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const setupLocalDatabase = async () => {
+    if (!globalThis.PdvLocalDB) return;
+    const statusElement = document.querySelector("#database-status");
+    const badge = document.querySelector("#database-badge");
+    const details = document.querySelector("#database-details");
+    try {
+      await globalThis.PdvLocalDB.open();
+      const status = await globalThis.PdvLocalDB.getStatus();
+      if (statusElement) {
+        statusElement.textContent = `Base local lista · dispositivo ${status.deviceId.slice(0, 8)}.`;
+        statusElement.classList.add("saved");
+      }
+      if (badge) {
+        badge.textContent = "Lista";
+        badge.className = "badge";
+      }
+      if (details) {
+        details.innerHTML = `<span><strong>${status.businessStores}</strong> almacenes</span><span><strong>${status.totalRecords}</strong> registros locales</span><span><strong>${status.outbox}</strong> operaciones pendientes</span><span><strong>${formatBytes(status.storage?.usage)}</strong> utilizados</span>`;
+      }
+    } catch (error) {
+      if (statusElement) statusElement.textContent = `No se pudo abrir la base local: ${error.message}`;
+      if (badge) {
+        badge.textContent = "Error";
+        badge.className = "badge danger";
+      }
+    }
+
+    document.querySelector("#database-persist")?.addEventListener("click", async event => {
+      const button = event.currentTarget;
+      if (!navigator.storage?.persist) {
+        statusElement.textContent = "Este navegador administra el almacenamiento automáticamente.";
+        return;
+      }
+      const persistent = await navigator.storage.persist();
+      statusElement.textContent = persistent
+        ? "El navegador protegerá los datos locales contra la limpieza automática."
+        : "El navegador no concedió protección especial; los datos siguen guardados localmente.";
+      statusElement.classList.toggle("saved", persistent);
+      button.textContent = persistent ? "Almacenamiento protegido" : "Volver a intentar";
+    });
+
+    document.querySelector("#database-export")?.addEventListener("click", async () => {
+      try {
+        const snapshot = await globalThis.PdvLocalDB.exportSnapshot();
+        const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `pdv-movil-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        statusElement.textContent = "Respaldo local exportado correctamente.";
+        statusElement.classList.add("saved");
+      } catch (error) {
+        statusElement.textContent = `No se pudo exportar el respaldo: ${error.message}`;
+        statusElement.classList.remove("saved");
+      }
+    });
+  };
+
   setupPwa();
   setupTerminalStorage();
+  setupLocalDatabase();
 
   let opener = null;
   const closeDialog = (backdrop) => {

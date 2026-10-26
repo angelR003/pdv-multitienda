@@ -1,8 +1,8 @@
 # PWA móvil · interfaz instalable
 
 Aplicación web progresiva de PDV Las Gardenias. Esta etapa incluye instalación,
-funcionamiento sin conexión y configuración de terminal guardada localmente.
-No usa API, autenticación ni base de datos remota.
+funcionamiento sin conexión, configuración de terminal y una base operativa local
+en IndexedDB. No usa API, autenticación ni base de datos remota.
 
 ## Abrir localmente
 
@@ -25,8 +25,16 @@ principal e `index.html` conserva la pantalla de venta.
 
 - `manifest.webmanifest` define nombre, colores, accesos rápidos e iconos.
 - `service-worker.js` almacena la interfaz para poder abrirla sin conexión.
-- La configuración de terminal se guarda en `localStorage`, dentro del espacio
-  privado que el navegador asigna a esta aplicación en cada dispositivo.
+- `db.js` crea 34 almacenes de dominio equivalentes al esquema SQLite, además de
+  metadatos, bandeja de sincronización y registro de conflictos.
+- Cada registro móvil utiliza UUID, versión, dispositivo de origen, borrado lógico
+  y estado de sincronización; `legacy_id` queda reservado para relacionarlo con
+  los identificadores numéricos existentes en SQLite.
+- La configuración de terminal se guarda en `localStorage` y también en los
+  metadatos de IndexedDB, dentro del espacio privado de cada dispositivo.
+- La pantalla de configuración permite solicitar almacenamiento persistente y
+  exportar un respaldo JSON de esta instalación.
+- La base SQLite real de la computadora nunca se incluye en los archivos públicos.
 - Los registros operativos siguen siendo datos ilustrativos y sus acciones
   permanecen deshabilitadas hasta la etapa de lógica de negocio.
 
