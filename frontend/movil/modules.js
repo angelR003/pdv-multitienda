@@ -62,7 +62,7 @@
     const session = auth?.getSession();
     if (!session) {
       location.replace("login.html");
-      throw new Error("Inicia sesión para continuar.");
+      return false;
     }
     const terminal = readTerminal();
     const term = String(terminal?.branch || "").toLowerCase();
@@ -70,7 +70,12 @@
     const configuredStore = stores.find(item => item.id === terminal?.branch || item.nombre.toLowerCase().includes(term));
     const employeeStore = user?.rol === "empleado" ? stores.find(item => item.id === user.tienda_id) : null;
     const store = employeeStore || configuredStore || stores.find(item => item.activa !== 0) || stores[0];
-    if (!store || !user) throw new Error("Falta una tienda o usuario activo en la base local.");
+    if (!user) {
+      auth?.logout();
+      location.replace("login.html");
+      return false;
+    }
+    if (!store) throw new Error("Falta una tienda activa en la base local.");
     const [inventory, products] = await Promise.all([database.list("inventario"), database.list("productos")]);
     const storeProductIds = new Set(inventory.filter(record => record.tienda_id === store.id).map(record => record.producto_id));
     const missingSamples = products.filter(product => product.is_demo && !storeProductIds.has(product.id));
@@ -90,6 +95,7 @@
     state.context = { store, user, stores, users, terminal };
     state.access = { isAdmin: user.rol === "administrador", readOnly: terminal?.usage === "consulta", session };
     try { state.cart = JSON.parse(sessionStorage.getItem("pdv-cart") || "[]"); } catch { state.cart = []; }
+    return true;
   };
 
   const inventoryMap = async storeId => new Map((await database.list("inventario")).filter(record => record.tienda_id === storeId).map(record => [record.producto_id, record]));
@@ -308,7 +314,7 @@
   async function render() {
     if (!operationalScreens.has(screen) || !database || !rules) return;
     try {
-      await loadContext();
+      if (!await loadContext()) return;
       if (ADMIN_SCREENS.has(screen) && !state.access.isAdmin) {
         renderIntoPage(`${hero("Acceso restringido", "Se requiere administrador", "Tu usuario no tiene permiso para abrir este apartado.")}<a class="button full" href="dashboard.html">Volver al menú</a>`);
         return;
