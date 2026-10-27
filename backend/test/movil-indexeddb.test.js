@@ -35,3 +35,21 @@ test("batch guarda una operación completa y la coloca en la bandeja de sincroni
   assert.equal((await db.getStatus()).outbox, before + 3);
 });
 
+test("un respaldo validado reemplaza los datos de forma atómica y restaura su bandeja", async () => {
+  const snapshot = await db.exportSnapshot();
+  const temporary = await db.save("productos", { nombre: "Producto que no debe sobrevivir" }, { isDemo: false });
+  assert.ok(await db.get("productos", temporary.id));
+
+  const summary = db.validateSnapshot(snapshot);
+  assert.equal(summary.totalRecords, Object.values(snapshot.counts).reduce((sum, count) => sum + count, 0));
+  await db.importSnapshot(snapshot);
+
+  assert.equal(await db.get("productos", temporary.id), undefined);
+  assert.equal((await db.getStatus()).outbox, 3);
+  assert.equal((await db.getMeta("last_import")).value.total_records, summary.totalRecords);
+});
+
+test("se rechazan archivos ajenos antes de modificar IndexedDB", () => {
+  assert.throws(() => db.validateSnapshot({ format: "archivo-ajeno", format_version: 1, stores: {} }), /no son compatibles/i);
+});
+

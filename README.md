@@ -4,6 +4,16 @@
 
 Sistema de punto de venta multitienda para operacion local, ventas rapidas, inventario, traspasos, fiados, envases retornables, recargas, servicios, cortes y reportes.
 
+## Migracion y respaldo de la PWA
+
+La base SQLite de escritorio puede convertirse a un archivo portable sin modificar el original:
+
+```powershell
+npm run export:pwa -- --out "$env:USERPROFILE\Downloads\pdv-escritorio.pdvbackup"
+```
+
+El archivo se importa desde **PWA > Configurar terminal > Importar o restaurar respaldo**. La misma pantalla permite descargar respaldos del teléfono. Consulta [Respaldos y migración de la PWA](docs/RESPALDOS-Y-MIGRACION-PWA.md) para conocer el procedimiento y sus límites.
+
 PDV Las Gardenias nacio para una tienda real: mostrador, clientes, envases, fiados, promociones, productos sueltos, recargas, entradas de mercancia, traspasos entre sucursales y decisiones diarias que no pueden depender de internet.
 
 ## Estado Actual

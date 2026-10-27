@@ -5,7 +5,8 @@
   "scripts": {
     "electron": "electron .",
     "build": "electron-builder",
-    "build:css": "tailwindcss -i ./frontend/css/input.css -o ./frontend/css/styles.css --minify"
+    "build:css": "tailwindcss -i ./frontend/css/input.css -o ./frontend/css/styles.css --minify",
+    "export:pwa": "node backend/src/tools/exportar-pwa.js"
   },
   "devDependencies": {
     "electron": "^42.1.0",

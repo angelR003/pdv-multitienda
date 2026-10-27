@@ -152,8 +152,17 @@
         <p class="muted small">IndexedDB guarda los registros dentro del espacio privado de esta PWA. La estructura corresponde a SQLite, pero utiliza identificadores globales para sincronizar sin duplicados más adelante.</p>
         <div class="database-stats" id="database-details" aria-live="polite"><span>Preparando almacenes…</span></div>
         <p class="storage-status small" id="database-status" role="status" aria-live="polite">Comprobando la base local.</p>
-        <div class="button-row"><button type="button" class="button secondary" id="database-persist">Proteger almacenamiento</button><button type="button" class="button secondary" id="database-export">Exportar respaldo</button></div>
-        <p class="muted micro">El respaldo es JSON y contiene solamente los datos guardados en esta instalación. La base SQLite de la computadora no se publica ni se copia automáticamente.</p>
+        <div class="button-row"><button type="button" class="button secondary" id="database-persist">Proteger almacenamiento</button><button type="button" class="button secondary" id="database-export">Crear respaldo</button></div>
+        <input id="database-import-file" type="file" accept=".pdvbackup,.json,application/json" hidden>
+        <button type="button" class="button secondary full" id="database-import">Importar o restaurar respaldo</button>
+        <div class="import-preview" id="database-import-preview" hidden>
+          <div><p class="eyebrow">Archivo verificado</p><h3 id="database-import-title">Respaldo listo</h3></div>
+          <div class="database-stats" id="database-import-details"></div>
+          <p class="muted small">Al confirmar se descargará primero una copia de seguridad de esta instalación. Después se reemplazarán sus datos operativos por los del archivo.</p>
+          <button type="button" class="button full" id="database-import-confirm">Confirmar importación</button>
+          <button type="button" class="button secondary full" id="database-import-cancel">Cancelar</button>
+        </div>
+        <p class="muted micro">Los archivos <strong>.pdvbackup</strong> se procesan únicamente dentro de esta PWA. Puedes restaurar un respaldo del teléfono o importar uno generado desde la base SQLite de la computadora.</p>
       </section>`;
     return `<div class="shell">${topbar("Configurar terminal", "Este dispositivo", "login.html", `<span class="icon-button placeholder"></span>`)}<main class="page">${content}</main></div>`;
   }
@@ -384,6 +393,18 @@
     return `${(value / 1024 / 1024).toFixed(1)} MB`;
   };
 
+  const downloadSnapshot = (snapshot, filename) => {
+    const blob = new Blob([JSON.stringify(snapshot)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const setupLocalDatabase = async () => {
     if (!globalThis.PdvLocalDB) return;
     const statusElement = document.querySelector("#database-status");
@@ -425,23 +446,86 @@
       button.textContent = persistent ? "Almacenamiento protegido" : "Volver a intentar";
     });
 
+    const timestampName = () => new Date().toISOString().replace(/[:.]/g, "-");
+    const importButton = document.querySelector("#database-import");
+    const importInput = document.querySelector("#database-import-file");
+    const importPreview = document.querySelector("#database-import-preview");
+    const importDetails = document.querySelector("#database-import-details");
+    const importTitle = document.querySelector("#database-import-title");
+    let pendingSnapshot = null;
+
     document.querySelector("#database-export")?.addEventListener("click", async () => {
       try {
         const snapshot = await globalThis.PdvLocalDB.exportSnapshot();
-        const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = `pdv-movil-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.append(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(url);
+        downloadSnapshot(snapshot, `pdv-movil-${timestampName()}.pdvbackup`);
         statusElement.textContent = "Respaldo local exportado correctamente.";
         statusElement.classList.add("saved");
       } catch (error) {
         statusElement.textContent = `No se pudo exportar el respaldo: ${error.message}`;
         statusElement.classList.remove("saved");
+      }
+    });
+
+    importButton?.addEventListener("click", () => importInput?.click());
+    importInput?.addEventListener("change", async () => {
+      const file = importInput.files?.[0];
+      pendingSnapshot = null;
+      if (importPreview) importPreview.hidden = true;
+      if (!file) return;
+      try {
+        if (file.size > 100 * 1024 * 1024) throw new Error("El archivo supera el límite de 100 MB.");
+        const snapshot = JSON.parse(await file.text());
+        const summary = globalThis.PdvLocalDB.validateSnapshot(snapshot);
+        pendingSnapshot = snapshot;
+        if (importTitle) importTitle.textContent = `${file.name} · ${summary.totalRecords.toLocaleString("es-MX")} registros`;
+        if (importDetails) {
+          const visibleCounts = [
+            ["Tiendas", summary.counts.tiendas], ["Productos", summary.counts.productos],
+            ["Inventario", summary.counts.inventario], ["Clientes", summary.counts.clientes_fiado],
+            ["Promociones", summary.counts.promociones], ["Ventas", summary.counts.ventas]
+          ];
+          importDetails.innerHTML = visibleCounts.map(([label, count]) => `<span><strong>${Number(count || 0).toLocaleString("es-MX")}</strong>${label}</span>`).join("");
+        }
+        if (importPreview) importPreview.hidden = false;
+        statusElement.textContent = "Respaldo verificado. Revisa el resumen antes de confirmar.";
+        statusElement.classList.add("saved");
+      } catch (error) {
+        statusElement.textContent = `No se puede usar este archivo: ${error.message}`;
+        statusElement.classList.remove("saved");
+      } finally {
+        importInput.value = "";
+      }
+    });
+
+    document.querySelector("#database-import-cancel")?.addEventListener("click", () => {
+      pendingSnapshot = null;
+      if (importPreview) importPreview.hidden = true;
+      statusElement.textContent = "Importación cancelada; no se modificó la base local.";
+      statusElement.classList.remove("saved");
+    });
+
+    document.querySelector("#database-import-confirm")?.addEventListener("click", async event => {
+      if (!pendingSnapshot) return;
+      if (!confirm("Se reemplazarán los datos de esta PWA por los del respaldo. Se descargará una copia previa. ¿Continuar?")) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const currentSnapshot = await globalThis.PdvLocalDB.exportSnapshot();
+        downloadSnapshot(currentSnapshot, `pdv-movil-antes-de-importar-${timestampName()}.pdvbackup`);
+        const imported = await globalThis.PdvLocalDB.importSnapshot(pendingSnapshot);
+        pendingSnapshot = null;
+        if (importPreview) importPreview.hidden = true;
+        const refreshed = await globalThis.PdvLocalDB.getStatus();
+        if (details) {
+          details.innerHTML = `<span><strong>${refreshed.businessStores}</strong> almacenes</span><span><strong>${refreshed.totalRecords.toLocaleString("es-MX")}</strong> registros locales</span><span><strong>${refreshed.outbox}</strong> operaciones pendientes</span><span><strong>${formatBytes(refreshed.storage?.usage)}</strong> utilizados</span>`;
+        }
+        statusElement.textContent = `Importación terminada: ${imported.totalRecords.toLocaleString("es-MX")} registros restaurados.`;
+        statusElement.classList.add("saved");
+      } catch (error) {
+        statusElement.textContent = `No se pudo importar el respaldo: ${error.message}`;
+        statusElement.classList.remove("saved");
+      } finally {
+        button.disabled = false;
       }
     });
   };

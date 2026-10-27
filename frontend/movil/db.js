@@ -4,6 +4,8 @@
   const DATABASE_NAME = "pdv-las-gardenias-local";
   const DATABASE_VERSION = 1;
   const LOGICAL_SCHEMA_VERSION = 1;
+  const BACKUP_FORMAT = "pdv-las-gardenias-backup";
+  const BACKUP_FORMAT_VERSION = 2;
 
   const BUSINESS_STORES = [
     "abonos_fiado", "accesos_usuarios", "ajustes_envases", "ajustes_inventario",
@@ -318,12 +320,83 @@
       stores[storeName] = await requestResult(database.transaction(storeName).objectStore(storeName).getAll());
     }
     return {
-      format: "pdv-las-gardenias-indexeddb",
-      format_version: 1,
+      format: BACKUP_FORMAT,
+      format_version: BACKUP_FORMAT_VERSION,
       logical_schema_version: LOGICAL_SCHEMA_VERSION,
       exported_at: new Date().toISOString(),
+      source: { type: "indexeddb" },
+      counts: Object.fromEntries(BUSINESS_STORES.map(storeName => [storeName, stores[storeName].length])),
       stores
     };
+  };
+
+  const validateSnapshot = snapshot => {
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) throw new Error("El archivo no contiene un respaldo válido.");
+    const supported = snapshot.format === BACKUP_FORMAT && Number(snapshot.format_version) === BACKUP_FORMAT_VERSION;
+    const legacy = snapshot.format === "pdv-las-gardenias-indexeddb" && Number(snapshot.format_version) === 1;
+    if (!supported && !legacy) throw new Error("El formato o la versión del respaldo no son compatibles.");
+    if (!snapshot.stores || typeof snapshot.stores !== "object" || Array.isArray(snapshot.stores)) throw new Error("El respaldo no contiene almacenes de datos.");
+    const unknownStores = Object.keys(snapshot.stores).filter(name => !BUSINESS_STORES.includes(name) && !Object.hasOwn(INTERNAL_STORES, name));
+    if (unknownStores.length) throw new Error(`El respaldo contiene almacenes desconocidos: ${unknownStores.join(", ")}.`);
+
+    let totalRecords = 0;
+    const counts = {};
+    for (const storeName of BUSINESS_STORES) {
+      const records = snapshot.stores[storeName] || [];
+      if (!Array.isArray(records)) throw new Error(`El almacén ${storeName} no es una lista válida.`);
+      records.forEach((record, index) => {
+        if (!record || typeof record !== "object" || Array.isArray(record) || typeof record.id !== "string" || !record.id.trim()) {
+          throw new Error(`El registro ${index + 1} de ${storeName} no tiene un identificador válido.`);
+        }
+      });
+      counts[storeName] = records.length;
+      totalRecords += records.length;
+    }
+    if (totalRecords > 500000) throw new Error("El respaldo supera el límite de 500,000 registros para esta versión.");
+    return {
+      format: snapshot.format,
+      sourceType: snapshot.source?.type || (legacy ? "indexeddb" : "desconocido"),
+      exportedAt: snapshot.exported_at || null,
+      counts,
+      totalRecords
+    };
+  };
+
+  const importSnapshot = async snapshot => {
+    const summary = validateSnapshot(snapshot);
+    const database = await open();
+    const storeNames = [...BUSINESS_STORES, "_meta", "_outbox", "_conflicts"];
+    const transaction = database.transaction(storeNames, "readwrite");
+    const metaStore = transaction.objectStore("_meta");
+    const deviceMeta = await requestResult(metaStore.get("device_id"));
+    const initializedMeta = await requestResult(metaStore.get("initialized"));
+    const schemaMeta = await requestResult(metaStore.get("logical_schema_version"));
+
+    BUSINESS_STORES.forEach(storeName => {
+      const store = transaction.objectStore(storeName);
+      store.clear();
+      (snapshot.stores[storeName] || []).forEach(record => store.put(record));
+    });
+    transaction.objectStore("_outbox").clear();
+    transaction.objectStore("_conflicts").clear();
+    if (summary.sourceType === "indexeddb") {
+      (snapshot.stores._outbox || []).forEach(record => transaction.objectStore("_outbox").put(record));
+      (snapshot.stores._conflicts || []).forEach(record => transaction.objectStore("_conflicts").put(record));
+    }
+    metaStore.clear();
+    [deviceMeta, initializedMeta, schemaMeta].filter(Boolean).forEach(record => metaStore.put(record));
+    metaStore.put({
+      key: "last_import",
+      value: {
+        imported_at: new Date().toISOString(),
+        source_type: summary.sourceType,
+        source_exported_at: summary.exportedAt,
+        total_records: summary.totalRecords
+      },
+      updated_at: new Date().toISOString()
+    });
+    await transactionDone(transaction);
+    return summary;
   };
 
   globalThis.PdvLocalDB = Object.freeze({
@@ -331,6 +404,8 @@
     DATABASE_NAME,
     DATABASE_VERSION,
     LOGICAL_SCHEMA_VERSION,
+    BACKUP_FORMAT,
+    BACKUP_FORMAT_VERSION,
     open,
     get,
     list,
@@ -341,6 +416,8 @@
     setMeta,
     getStatus,
     exportSnapshot,
+    validateSnapshot,
+    importSnapshot,
     uuid
   });
 })();
