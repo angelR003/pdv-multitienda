@@ -366,7 +366,13 @@
     let stores = [];
     try {
       await globalThis.PdvLocalDB?.open();
-      stores = (await globalThis.PdvLocalDB?.list("tiendas") || []).filter(store => store.activa !== 0);
+      const storeOrder = ["las gardenias", "las gardenias 2", "los angeles"];
+      const normalizedName = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      stores = (await globalThis.PdvLocalDB?.list("tiendas") || []).filter(store => store.activa !== 0).sort((left, right) => {
+        const leftIndex = storeOrder.indexOf(normalizedName(left.nombre));
+        const rightIndex = storeOrder.indexOf(normalizedName(right.nombre));
+        return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex) || left.nombre.localeCompare(right.nombre, "es");
+      });
       if (stores.length) {
         form.elements.branch.replaceChildren(...stores.map(store => new Option(store.nombre, store.id)));
       }

@@ -32,7 +32,7 @@
   const field = (label, name, options = {}) => `<div class="field"><label>${escapeHtml(label)}<input class="input" name="${escapeHtml(name)}" type="${options.type || "text"}" ${options.required === false ? "" : "required"} ${options.step ? `step="${options.step}"` : ""} ${options.min != null ? `min="${options.min}"` : ""} ${options.minlength ? `minlength="${options.minlength}"` : ""} value="${escapeHtml(options.value ?? "")}" placeholder="${escapeHtml(options.placeholder || "")}"></label></div>`;
   const select = (label, name, choices, selected = "") => `<div class="field"><label>${escapeHtml(label)}<select name="${escapeHtml(name)}" required>${choices.map(choice => `<option value="${escapeHtml(choice.value)}" ${String(choice.value) === String(selected) ? "selected" : ""}>${escapeHtml(choice.label)}</option>`).join("")}</select></label></div>`;
   const productChoices = products => products.filter(product => product.activo !== 0).map(product => ({ value: product.id, label: `${product.nombre} · ${money(product.precio_global)}` }));
-  const storeChoices = stores => stores.filter(store => store.activa !== 0).map(store => ({ value: store.id, label: store.nombre }));
+  const storeChoices = stores => stores.filter(store => store.activa !== 0).slice().sort((left, right) => left.nombre.localeCompare(right.nombre, "es", { numeric: true })).map(store => ({ value: store.id, label: store.nombre }));
   const toast = (message, type = "ok") => {
     let element = document.querySelector("#app-toast");
     if (!element) {
