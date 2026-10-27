@@ -2,7 +2,7 @@
   "use strict";
 
   const DATABASE_NAME = "pdv-las-gardenias-local";
-  const DATABASE_VERSION = 1;
+  const DATABASE_VERSION = 2;
   const LOGICAL_SCHEMA_VERSION = 1;
   const BACKUP_FORMAT = "pdv-las-gardenias-backup";
   const BACKUP_FORMAT_VERSION = 2;
@@ -58,7 +58,8 @@
   const INTERNAL_STORES = {
     _meta: { keyPath: "key", indexes: [] },
     _outbox: { keyPath: "operation_id", indexes: ["status", "entity", "record_id", "created_at"] },
-    _conflicts: { keyPath: "id", indexes: ["status", "entity", "record_id", "created_at"] }
+    _conflicts: { keyPath: "id", indexes: ["status", "entity", "record_id", "created_at"] },
+    _credentials: { keyPath: "user_id", indexes: ["updated_at"] }
   };
 
   let databasePromise = null;
@@ -141,7 +142,8 @@
     const timestamp = new Date().toISOString();
     const deviceId = uuid();
     const centroId = uuid();
-    const norteId = uuid();
+    const gardenias2Id = uuid();
+    const angelesId = uuid();
     const userId = uuid();
     const products = [
       { id: uuid(), nombre: "Leche entera 1 L", codigo_barras: "DEMO-750001", categoria: "Lácteos", unidad: "pieza", precio_global: 27.5, costo_compra: 22, tipo_producto: "codigo_barras", activo: 1 },
@@ -150,8 +152,9 @@
     ];
 
     const demoOptions = { timestamp, isDemo: true, syncStatus: "demo" };
-    transaction.objectStore("tiendas").put(baseRecord({ id: centroId, nombre: "Las Gardenias Centro · Demostración", ubicacion: "Datos locales de ejemplo", activa: 1 }, deviceId, demoOptions));
-    transaction.objectStore("tiendas").put(baseRecord({ id: norteId, nombre: "Las Gardenias Norte · Demostración", ubicacion: "Datos locales de ejemplo", activa: 1 }, deviceId, demoOptions));
+    transaction.objectStore("tiendas").put(baseRecord({ id: centroId, nombre: "Las Gardenias", ubicacion: "Datos locales de ejemplo", activa: 1 }, deviceId, demoOptions));
+    transaction.objectStore("tiendas").put(baseRecord({ id: gardenias2Id, nombre: "Las Gardenias 2", ubicacion: "Datos locales de ejemplo", activa: 1 }, deviceId, demoOptions));
+    transaction.objectStore("tiendas").put(baseRecord({ id: angelesId, nombre: "Los Ángeles", ubicacion: "Datos locales de ejemplo", activa: 1 }, deviceId, demoOptions));
     transaction.objectStore("usuarios").put(baseRecord({ id: userId, nombre: "Usuario de demostración", username: "demo", rol: "administrador", tienda_id: centroId, activo: 1 }, deviceId, demoOptions));
     products.forEach((product, index) => {
       transaction.objectStore("productos").put(baseRecord(product, deviceId, demoOptions));
@@ -163,10 +166,37 @@
     await transactionDone(transaction);
   };
 
+  const migrateDemoStores = async database => {
+    const transaction = database.transaction(["tiendas", "_meta"], "readwrite");
+    const store = transaction.objectStore("tiendas");
+    const rows = await requestResult(store.getAll());
+    if (!rows.length || rows.some(row => !row.is_demo)) {
+      await transactionDone(transaction);
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    const device = await requestResult(transaction.objectStore("_meta").get("device_id"));
+    const desiredNames = ["Las Gardenias", "Las Gardenias 2", "Los Ángeles"];
+    if (rows.length === desiredNames.length && desiredNames.every(name => rows.some(row => row.nombre === name))) {
+      await transactionDone(transaction);
+      return;
+    }
+    const ordered = rows.slice().sort((left, right) => {
+      const score = row => /centro/i.test(row.nombre) ? 0 : /norte|2/i.test(row.nombre) ? 1 : /ángeles|angeles/i.test(row.nombre) ? 2 : 3;
+      return score(left) - score(right);
+    });
+    ordered.slice(0, 3).forEach((row, index) => store.put({ ...row, nombre: desiredNames[index], updated_at: timestamp }));
+    for (let index = ordered.length; index < desiredNames.length; index += 1) {
+      store.put(baseRecord({ nombre: desiredNames[index], ubicacion: "Datos locales de ejemplo", activa: 1 }, device?.value || uuid(), { timestamp, isDemo: true, syncStatus: "demo" }));
+    }
+    await transactionDone(transaction);
+  };
+
   const open = async () => {
     if (!databasePromise) {
       databasePromise = openRaw().then(async database => {
         await seedDatabase(database);
+        await migrateDemoStores(database);
         return database;
       }).catch(error => {
         databasePromise = null;
@@ -191,6 +221,25 @@
     transaction.objectStore("_meta").put({ key, value, updated_at: new Date().toISOString() });
     await transactionDone(transaction);
     return value;
+  };
+
+  const getCredential = async userId => {
+    const database = await open();
+    return requestResult(database.transaction("_credentials").objectStore("_credentials").get(userId));
+  };
+
+  const listCredentials = async () => {
+    const database = await open();
+    return requestResult(database.transaction("_credentials").objectStore("_credentials").getAll());
+  };
+
+  const setCredential = async credential => {
+    if (!credential?.user_id) throw new Error("La credencial no tiene usuario.");
+    const database = await open();
+    const transaction = database.transaction("_credentials", "readwrite");
+    transaction.objectStore("_credentials").put({ ...credential, updated_at: new Date().toISOString() });
+    await transactionDone(transaction);
+    return credential;
   };
 
   const save = async (storeName, payload, options = {}) => {
@@ -316,7 +365,7 @@
   const exportSnapshot = async () => {
     const database = await open();
     const stores = {};
-    for (const storeName of [...BUSINESS_STORES, "_meta", "_outbox", "_conflicts"]) {
+    for (const storeName of [...BUSINESS_STORES, "_meta", "_outbox", "_conflicts", "_credentials"]) {
       stores[storeName] = await requestResult(database.transaction(storeName).objectStore(storeName).getAll());
     }
     return {
@@ -365,7 +414,7 @@
   const importSnapshot = async snapshot => {
     const summary = validateSnapshot(snapshot);
     const database = await open();
-    const storeNames = [...BUSINESS_STORES, "_meta", "_outbox", "_conflicts"];
+    const storeNames = [...BUSINESS_STORES, "_meta", "_outbox", "_conflicts", "_credentials"];
     const transaction = database.transaction(storeNames, "readwrite");
     const metaStore = transaction.objectStore("_meta");
     const deviceMeta = await requestResult(metaStore.get("device_id"));
@@ -379,9 +428,11 @@
     });
     transaction.objectStore("_outbox").clear();
     transaction.objectStore("_conflicts").clear();
+    transaction.objectStore("_credentials").clear();
     if (summary.sourceType === "indexeddb") {
       (snapshot.stores._outbox || []).forEach(record => transaction.objectStore("_outbox").put(record));
       (snapshot.stores._conflicts || []).forEach(record => transaction.objectStore("_conflicts").put(record));
+      (snapshot.stores._credentials || []).forEach(record => transaction.objectStore("_credentials").put(record));
     }
     metaStore.clear();
     [deviceMeta, initializedMeta, schemaMeta].filter(Boolean).forEach(record => metaStore.put(record));
@@ -414,6 +465,9 @@
     remove,
     getMeta,
     setMeta,
+    getCredential,
+    listCredentials,
+    setCredential,
     getStatus,
     exportSnapshot,
     validateSnapshot,

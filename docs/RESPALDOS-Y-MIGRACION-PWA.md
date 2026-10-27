@@ -28,6 +28,17 @@ La base SQLite se abre con `OPEN_READONLY`, se verifica con `PRAGMA quick_check`
 
 Antes de reemplazar los datos, la PWA descarga automáticamente un respaldo del contenido anterior. La importación se ejecuta en una sola transacción de IndexedDB: si ocurre un error, no queda una mezcla parcial.
 
+Después de importar SQLite, la PWA reinicia la preparación local. Se debe elegir una de las tiendas importadas, seleccionar **Venta y consulta** o **Solo consulta** y crear la primera contraseña local para un usuario administrador. Los hashes de contraseña de la computadora nunca forman parte del archivo de migración.
+
+## Usuarios y permisos locales
+
+- **Administrador:** acceso global, configuración del dispositivo, usuarios, promociones, reportes y operaciones sensibles.
+- **Empleado:** operación cotidiana de la tienda que tiene asignada, sin administración global.
+- **Solo consulta:** bloquea todas las escrituras independientemente del rol.
+- **Venta y consulta:** permite las escrituras correspondientes al rol del usuario.
+
+Las credenciales móviles se derivan con PBKDF2-SHA-256 y se almacenan separadas de los registros de usuarios. La sesión local expira después de ocho horas.
+
 ## Respaldar o restaurar el teléfono
 
 En **Configuración de terminal**, **Crear respaldo** descarga un archivo `.pdvbackup`. Guárdalo en Archivos, Descargas, Google Drive, iCloud u otra ubicación controlada por el usuario. La PWA no puede escribir silenciosamente en cualquier carpeta del teléfono por las reglas de seguridad del navegador.

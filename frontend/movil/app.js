@@ -123,25 +123,35 @@
   function loginPage() {
     return `<main class="login-shell"><section class="login-card">
       <div class="brand"><img src="../assets/gardenia.png" alt="Gardenia"><div><p class="eyebrow">PDV móvil</p><h1>Las Gardenias</h1></div></div>
-      <span class="demo-label">Aplicación instalable</span>
-      <p class="muted" style="margin:10px 0 22px">Explora la interfaz sin usuario, contraseña ni conexión al sistema real.</p>
-      <div class="stack">${field("Usuario", "No requerido")} ${field("Contraseña", "No requerida", "password")}</div>
-      <a class="button full" href="dashboard.html" style="margin-top:18px">Entrar →</a>
-      <a class="button secondary full" href="config-terminal.html" style="margin-top:10px">Configurar terminal</a>
+      <span class="demo-label">Acceso local seguro</span>
+      <p class="muted" style="margin:10px 0 22px">Inicia sesión con un usuario configurado en este dispositivo.</p>
+      <form class="stack" id="login-form">
+        <div class="field"><label for="login-username">Usuario</label><input class="input" id="login-username" name="username" autocomplete="username" required></div>
+        <div class="field"><label for="login-password">Contraseña</label><input class="input" id="login-password" name="password" type="password" autocomplete="current-password" required></div>
+        <button class="button full" type="submit">Entrar →</button>
+      </form>
+      <form class="stack initial-access" id="initial-access-form" hidden>
+        <div><p class="eyebrow">Primera configuración</p><h2>Crear acceso administrador</h2><p class="muted small">Las contraseñas de la computadora no se copiaron. Define una contraseña local para comenzar.</p></div>
+        <div class="field"><label for="initial-admin">Administrador</label><select id="initial-admin" name="user_id" required></select></div>
+        <div class="field"><label for="initial-password">Nueva contraseña</label><input class="input" id="initial-password" name="password" type="password" minlength="6" autocomplete="new-password" required></div>
+        <div class="field"><label for="initial-confirm">Confirmar contraseña</label><input class="input" id="initial-confirm" name="confirm" type="password" minlength="6" autocomplete="new-password" required></div>
+        <button class="button full" type="submit">Configurar y entrar</button>
+      </form>
+      <p class="storage-status small" id="login-status" role="status" aria-live="polite"></p>
+      <a class="button secondary full" href="config-terminal.html" style="margin-top:10px">Configurar este dispositivo</a>
       <section class="install-panel" aria-labelledby="install-title">
         <div><h2 id="install-title">Instalar en este dispositivo</h2><p class="small muted" id="pwa-status">Comprobando compatibilidad…</p></div>
         <button type="button" class="button full" id="pwa-install" hidden>Instalar aplicación</button>
         <button type="button" class="button secondary full" data-open="dlg-install">Cómo agregarla a inicio</button>
       </section>
-      <p class="small muted" style="margin-top:18px;text-align:center">Los datos mostrados son ficticios y están identificados como ejemplo.</p>
+      <p class="small muted" style="margin-top:18px;text-align:center">La sesión dura hasta 8 horas y funciona sin conexión.</p>
     </section>${dialog("dlg-install", "Agregar a la pantalla de inicio", `<div class="install-steps"><p><strong>Android · Chrome</strong><br>Abre el menú ⋮ y elige <em>Instalar aplicación</em> o <em>Agregar a pantalla principal</em>.</p><p><strong>iPhone · Safari</strong><br>Toca Compartir y después <em>Agregar a inicio</em>.</p><p class="muted small">Una vez instalada, la interfaz y la configuración de terminal quedan disponibles en el almacenamiento privado de la aplicación.</p></div>`, `<button class="button full" data-close>Entendido</button>`)}</main>`;
   }
 
   function configPage() {
     const content = `<div class="hero"><p class="eyebrow">Preparación inicial</p><h1>Configura esta terminal</h1><p class="muted">La configuración y la base operativa se guardan únicamente en este dispositivo.</p></div>
       <form class="card stack" id="terminal-form">
-        <div class="field"><label for="terminal-branch">Sucursal</label><select id="terminal-branch" name="branch"><option value="centro">Las Gardenias Centro · Ejemplo</option><option value="norte">Las Gardenias Norte · Ejemplo</option></select></div>
-        <div class="field"><label for="terminal-name">Nombre de terminal</label><input class="input" id="terminal-name" name="name" maxlength="40" placeholder="Caja móvil 01"></div>
+        <div class="field"><label for="terminal-branch">Sucursal</label><select id="terminal-branch" name="branch"><option value="las-gardenias">Las Gardenias</option><option value="las-gardenias-2">Las Gardenias 2</option><option value="los-angeles">Los Ángeles</option></select></div>
         <div class="field"><label for="terminal-use">Uso principal</label><select id="terminal-use" name="usage"><option value="ventas">Venta y consulta</option><option value="consulta">Solo consulta</option></select></div>
         <button type="submit" class="button full">Guardar en este dispositivo</button>
         <p class="storage-status small" id="terminal-status" role="status" aria-live="polite">Aún no hay una configuración guardada.</p>
@@ -173,7 +183,7 @@
       ${prototypeNote()}
       <div class="card-row" style="margin-bottom:12px"><h2>Todos los apartados</h2><span class="badge">14 visibles</span></div>
       <section class="menu-grid" aria-label="Apartados del sistema">${cards}</section>`;
-    return `<div class="shell">${topbar("PDV Las Gardenias", "Menú principal", null, `<a class="icon-button" href="config-terminal.html" aria-label="Configuración">⚙</a>`)}<main class="page">${content}</main>${bottomNav("menu")}</div>`;
+    return `<div class="shell">${topbar("PDV Las Gardenias", "Menú principal", null, `<span class="topbar-actions"><a class="icon-button" href="config-terminal.html" aria-label="Configuración">⚙</a><button class="icon-button" type="button" data-logout aria-label="Cerrar sesión">⇥</button></span>`)}<main class="page">${content}</main>${bottomNav("menu")}</div>`;
   }
 
   function ventasPage() {
@@ -270,7 +280,7 @@
     return layout(`<div class="hero"><p class="eyebrow">Entre sucursales</p><h1>Traspasos</h1><p class="muted">Toca un registro para revisar su detalle.</p></div>${prototypeNote()}
       <section class="card"><button class="button secondary full" data-open="dlg-traspaso">Preparar nuevo traspaso</button></section>
       <section class="list"><a class="list-item actionable" href="traspaso-detalle.html"><div class="list-item-main"><strong>Traspaso T-0184</strong><span>Centro → Norte · 22 oct</span></div><div class="list-item-value"><span class="badge warning">En tránsito</span><span>Ver detalle →</span></div></a><a class="list-item actionable" href="traspaso-detalle.html"><div class="list-item-main"><strong>Traspaso T-0183</strong><span>Norte → Centro · 21 oct</span></div><div class="list-item-value"><span class="badge">Recibido</span><span>Ver detalle →</span></div></a></section>
-      ${dialog("dlg-traspaso", "Nuevo traspaso", `<div class="field"><label>Tienda destino</label><select><option>Las Gardenias Norte · Ejemplo</option></select></div>${field("Buscar producto", "Nombre o código")} ${field("Cantidad", "0", "number")}`, `<button class="button secondary" data-close>Cerrar</button>${pendingButton("Confirmar traspaso")}`)}`);
+      ${dialog("dlg-traspaso", "Nuevo traspaso", `<div class="field"><label>Tienda destino</label><select><option>Los Ángeles</option></select></div>${field("Buscar producto", "Nombre o código")} ${field("Cantidad", "0", "number")}`, `<button class="button secondary" data-close>Cerrar</button>${pendingButton("Confirmar traspaso")}`)}`);
   }
 
   function traspasoDetallePage() {
@@ -349,17 +359,27 @@
     updateInstallUi();
   };
 
-  const setupTerminalStorage = () => {
+  const setupTerminalStorage = async () => {
     const form = document.querySelector("#terminal-form");
     if (!form) return;
     const status = document.querySelector("#terminal-status");
+    let stores = [];
+    try {
+      await globalThis.PdvLocalDB?.open();
+      stores = (await globalThis.PdvLocalDB?.list("tiendas") || []).filter(store => store.activa !== 0);
+      if (stores.length) {
+        form.elements.branch.replaceChildren(...stores.map(store => new Option(store.nombre, store.id)));
+      }
+    } catch (error) {
+      status.textContent = `No se pudieron cargar las tiendas: ${error.message}`;
+    }
     try {
       const saved = JSON.parse(localStorage.getItem(terminalStorageKey) || "null");
       if (saved) {
-        form.elements.branch.value = saved.branch || "centro";
-        form.elements.name.value = saved.name || "";
+        if ([...form.elements.branch.options].some(option => option.value === saved.branch)) form.elements.branch.value = saved.branch;
         form.elements.usage.value = saved.usage || "ventas";
-        status.textContent = `Configuración local guardada: ${saved.name || "Terminal sin nombre"}.`;
+        const storeName = form.elements.branch.options[form.elements.branch.selectedIndex]?.text || "Sucursal";
+        status.textContent = `Configurado: ${storeName} · ${saved.usage === "consulta" ? "Solo consulta" : "Venta y consulta"}.`;
         status.classList.add("saved");
       }
     } catch {
@@ -370,19 +390,91 @@
       event.preventDefault();
       const terminal = {
         branch: form.elements.branch.value,
-        name: form.elements.name.value.trim() || "Caja móvil 01",
         usage: form.elements.usage.value,
         updatedAt: new Date().toISOString()
       };
       try {
         localStorage.setItem(terminalStorageKey, JSON.stringify(terminal));
         globalThis.PdvLocalDB?.setMeta("terminal", terminal).catch(() => {});
-        form.elements.name.value = terminal.name;
-        status.textContent = `Guardado en este dispositivo: ${terminal.name}.`;
+        const storeName = form.elements.branch.options[form.elements.branch.selectedIndex]?.text || "Sucursal";
+        status.textContent = `Guardado: ${storeName} · ${terminal.usage === "consulta" ? "Solo consulta" : "Venta y consulta"}.`;
         status.classList.add("saved");
       } catch {
         status.textContent = "El navegador no permitió guardar la configuración local.";
         status.classList.remove("saved");
+      }
+    });
+  };
+
+  const setupAuthentication = async () => {
+    const auth = globalThis.PdvLocalAuth;
+    const database = globalThis.PdvLocalDB;
+    if (!auth || !database) return;
+    await database.open();
+    const credentialsExist = await auth.hasCredentials();
+    const session = auth.getSession();
+
+    if (screen === "config" && credentialsExist) {
+      const sessionUser = session ? await database.get("usuarios", session.user_id) : null;
+      if (!sessionUser || sessionUser.activo === 0 || sessionUser.rol !== "administrador") {
+        location.replace("login.html");
+        return;
+      }
+    }
+    if (screen !== "login") return;
+
+    const loginForm = document.querySelector("#login-form");
+    const initialForm = document.querySelector("#initial-access-form");
+    const status = document.querySelector("#login-status");
+    if (session) {
+      location.replace("dashboard.html");
+      return;
+    }
+
+    if (!credentialsExist) {
+      const users = (await database.list("usuarios")).filter(user => user.activo !== 0 && user.rol === "administrador");
+      loginForm.hidden = true;
+      initialForm.hidden = false;
+      const select = initialForm.elements.user_id;
+      select.replaceChildren(...users.map(user => new Option(`${user.nombre} · @${user.username}`, user.id)));
+      if (!users.length) {
+        status.textContent = "No hay un administrador activo. Importa la base o crea uno desde la base de escritorio.";
+        initialForm.querySelector("button").disabled = true;
+      }
+    }
+
+    loginForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      const button = loginForm.querySelector("button");
+      button.disabled = true;
+      try {
+        const terminal = JSON.parse(localStorage.getItem(terminalStorageKey) || "null");
+        await auth.login(loginForm.elements.username.value, loginForm.elements.password.value, terminal?.branch || null);
+        location.replace("dashboard.html");
+      } catch (error) {
+        status.textContent = error.message;
+        status.classList.remove("saved");
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    initialForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      const button = initialForm.querySelector("button");
+      button.disabled = true;
+      try {
+        if (initialForm.elements.password.value !== initialForm.elements.confirm.value) throw new Error("Las contraseñas no coinciden.");
+        const userId = initialForm.elements.user_id.value;
+        await auth.setPassword(userId, initialForm.elements.password.value);
+        const user = await database.get("usuarios", userId);
+        auth.createSession(user);
+        location.replace("dashboard.html");
+      } catch (error) {
+        status.textContent = error.message;
+        status.classList.remove("saved");
+      } finally {
+        button.disabled = false;
       }
     });
   };
@@ -519,8 +611,12 @@
         if (details) {
           details.innerHTML = `<span><strong>${refreshed.businessStores}</strong> almacenes</span><span><strong>${refreshed.totalRecords.toLocaleString("es-MX")}</strong> registros locales</span><span><strong>${refreshed.outbox}</strong> operaciones pendientes</span><span><strong>${formatBytes(refreshed.storage?.usage)}</strong> utilizados</span>`;
         }
-        statusElement.textContent = `Importación terminada: ${imported.totalRecords.toLocaleString("es-MX")} registros restaurados.`;
+        statusElement.textContent = `Importación terminada: ${imported.totalRecords.toLocaleString("es-MX")} registros restaurados.${imported.sourceType === "sqlite" ? " Se reiniciará la configuración local." : ""}`;
         statusElement.classList.add("saved");
+        if (imported.sourceType === "sqlite") {
+          globalThis.PdvLocalAuth?.logout();
+          setTimeout(() => location.reload(), 1200);
+        }
       } catch (error) {
         statusElement.textContent = `No se pudo importar el respaldo: ${error.message}`;
         statusElement.classList.remove("saved");
@@ -531,6 +627,7 @@
   };
 
   setupPwa();
+  setupAuthentication().catch(error => console.error(error));
   setupTerminalStorage();
   setupLocalDatabase();
 
@@ -544,6 +641,12 @@
   };
 
   document.addEventListener("click", event => {
+    const logoutButton = event.target.closest("[data-logout]");
+    if (logoutButton) {
+      globalThis.PdvLocalAuth?.logout();
+      location.replace("login.html");
+      return;
+    }
     const openButton = event.target.closest("[data-open]");
     if (openButton) {
       const backdrop = document.getElementById(openButton.dataset.open);

@@ -4,16 +4,41 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 require("fake-indexeddb/auto");
+const localValues = new Map();
+globalThis.localStorage = {
+  getItem: key => localValues.has(key) ? localValues.get(key) : null,
+  setItem: (key, value) => localValues.set(key, String(value)),
+  removeItem: key => localValues.delete(key)
+};
 require("../../frontend/movil/db.js");
+require("../../frontend/movil/auth.js");
 
 const db = globalThis.PdvLocalDB;
+const auth = globalThis.PdvLocalAuth;
 
 test("la base móvil inicia tiendas, usuario, productos e inventario", async () => {
   await db.open();
-  assert.equal((await db.list("tiendas")).length, 2);
+  const stores = await db.list("tiendas");
+  assert.equal(stores.length, 3);
+  assert.deepEqual(stores.map(store => store.nombre).sort(), ["Las Gardenias", "Las Gardenias 2", "Los Ángeles"].sort());
   assert.equal((await db.list("usuarios")).length, 1);
   assert.equal((await db.list("productos")).length, 3);
   assert.equal((await db.list("inventario")).length, 3);
+});
+
+test("el acceso local valida contraseña, rol y tienda del empleado", async () => {
+  const [administrator] = await db.list("usuarios");
+  const stores = await db.list("tiendas");
+  await auth.setPassword(administrator.id, "admin-seguro");
+  const adminSession = await auth.login(administrator.username, "admin-seguro", stores[2].id);
+  assert.equal(adminSession.rol, "administrador");
+  await assert.rejects(() => auth.login(administrator.username, "incorrecta", stores[0].id), /incorrectos/i);
+
+  const employee = await db.save("usuarios", { nombre: "Empleado local", username: "empleado-local", rol: "empleado", tienda_id: stores[0].id, activo: 1 }, { queue: false });
+  await auth.setPassword(employee.id, "empleado-seguro");
+  await assert.rejects(() => auth.login(employee.username, "empleado-seguro", stores[1].id), /no pertenece/i);
+  assert.equal((await auth.login(employee.username, "empleado-seguro", stores[0].id)).rol, "empleado");
+  auth.logout();
 });
 
 test("batch guarda una operación completa y la coloca en la bandeja de sincronización", async () => {

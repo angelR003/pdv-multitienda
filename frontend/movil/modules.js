@@ -4,8 +4,11 @@
   const screen = document.body.dataset.screen || "dashboard";
   const database = globalThis.PdvLocalDB;
   const rules = globalThis.PdvBusinessRules;
+  const auth = globalThis.PdvLocalAuth;
   const app = document.querySelector("#app");
-  const state = { context: null, cart: [] };
+  const state = { context: null, cart: [], access: null };
+  const ADMIN_SCREENS = new Set(["ajustes", "promociones", "reportes", "usuarios"]);
+  const ADMIN_ACTIONS = new Set(["save-product", "save-adjustment", "save-promotion", "save-transfer", "save-user", "change-user-password"]);
   const operationalScreens = new Set([
     "dashboard", "ventas", "productos", "inventario", "entradas", "caja", "cortes",
     "ajustes", "historial", "venta-detalle", "importes", "fiados", "promociones",
@@ -26,7 +29,7 @@
   const hero = (eyebrow, title, description) => `<div class="hero"><p class="eyebrow">${escapeHtml(eyebrow)}</p><h1>${escapeHtml(title)}</h1><p class="muted">${escapeHtml(description)}</p></div>`;
   const empty = message => `<div class="empty-state"><strong>Sin registros</strong><span>${escapeHtml(message)}</span></div>`;
   const badge = (text, kind = "") => `<span class="badge ${kind}">${escapeHtml(text)}</span>`;
-  const field = (label, name, options = {}) => `<div class="field"><label>${escapeHtml(label)}<input class="input" name="${escapeHtml(name)}" type="${options.type || "text"}" ${options.required === false ? "" : "required"} ${options.step ? `step="${options.step}"` : ""} ${options.min != null ? `min="${options.min}"` : ""} value="${escapeHtml(options.value ?? "")}" placeholder="${escapeHtml(options.placeholder || "")}"></label></div>`;
+  const field = (label, name, options = {}) => `<div class="field"><label>${escapeHtml(label)}<input class="input" name="${escapeHtml(name)}" type="${options.type || "text"}" ${options.required === false ? "" : "required"} ${options.step ? `step="${options.step}"` : ""} ${options.min != null ? `min="${options.min}"` : ""} ${options.minlength ? `minlength="${options.minlength}"` : ""} value="${escapeHtml(options.value ?? "")}" placeholder="${escapeHtml(options.placeholder || "")}"></label></div>`;
   const select = (label, name, choices, selected = "") => `<div class="field"><label>${escapeHtml(label)}<select name="${escapeHtml(name)}" required>${choices.map(choice => `<option value="${escapeHtml(choice.value)}" ${String(choice.value) === String(selected) ? "selected" : ""}>${escapeHtml(choice.label)}</option>`).join("")}</select></label></div>`;
   const productChoices = products => products.filter(product => product.activo !== 0).map(product => ({ value: product.id, label: `${product.nombre} · ${money(product.precio_global)}` }));
   const storeChoices = stores => stores.filter(store => store.activa !== 0).map(store => ({ value: store.id, label: store.nombre }));
@@ -52,10 +55,17 @@
 
   const loadContext = async () => {
     const [stores, users] = await Promise.all([database.list("tiendas"), database.list("usuarios")]);
+    const session = auth?.getSession();
+    if (!session) {
+      location.replace("login.html");
+      throw new Error("Inicia sesión para continuar.");
+    }
     const terminal = readTerminal();
     const term = String(terminal?.branch || "").toLowerCase();
-    const store = stores.find(item => item.id === terminal?.branch || item.nombre.toLowerCase().includes(term)) || stores.find(item => item.activa !== 0) || stores[0];
-    const user = users.find(item => item.tienda_id === store?.id && item.activo !== 0) || users.find(item => item.activo !== 0) || users[0];
+    const user = users.find(item => item.id === session.user_id && item.activo !== 0);
+    const configuredStore = stores.find(item => item.id === terminal?.branch || item.nombre.toLowerCase().includes(term));
+    const employeeStore = user?.rol === "empleado" ? stores.find(item => item.id === user.tienda_id) : null;
+    const store = employeeStore || configuredStore || stores.find(item => item.activa !== 0) || stores[0];
     if (!store || !user) throw new Error("Falta una tienda o usuario activo en la base local.");
     const [inventory, products] = await Promise.all([database.list("inventario"), database.list("productos")]);
     const storeProductIds = new Set(inventory.filter(record => record.tienda_id === store.id).map(record => record.producto_id));
@@ -74,6 +84,7 @@
       })), { queue: false, isDemo: true, syncStatus: "demo" });
     }
     state.context = { store, user, stores, users, terminal };
+    state.access = { isAdmin: user.rol === "administrador", readOnly: terminal?.usage === "consulta", session };
     try { state.cart = JSON.parse(sessionStorage.getItem("pdv-cart") || "[]"); } catch { state.cart = []; }
   };
 
@@ -81,22 +92,44 @@
   const productMap = async () => new Map((await database.list("productos")).map(record => [record.id, record]));
   const renderIntoPage = html => {
     const page = app.querySelector(".page");
-    if (page) page.innerHTML = `<div id="module-content">${html}</div>`;
+    if (page) {
+      page.innerHTML = `<div id="module-content">${html}</div>`;
+      applyAccessUi();
+    }
+  };
+
+  const applyAccessUi = () => {
+    if (!state.access) return;
+    if (!state.access.isAdmin) document.querySelector('a[href="config-terminal.html"]')?.remove();
+    if (state.access.readOnly) {
+      const content = document.querySelector("#module-content");
+      content?.insertAdjacentHTML("afterbegin", `<div class="prototype-note"><span>◉</span><span><strong>Terminal de consulta.</strong> Puedes revisar información, pero no modificarla.</span></div>`);
+      content?.querySelectorAll("form[data-action] input, form[data-action] select, form[data-action] button, [data-add-product], [data-remove-product], [data-edit-product], [data-edit-stock], [data-open-client], [data-return-sale], [data-transfer-action]").forEach(element => { element.disabled = true; });
+    } else if (!state.access.isAdmin) {
+      document.querySelectorAll('[data-action="save-product"], [data-action="save-adjustment"], [data-action="save-promotion"], [data-action="save-transfer"], [data-action="save-user"], [data-toggle="product-form"], [data-edit-product], [data-edit-stock], [data-transfer-action="cancel"]').forEach(element => { element.hidden = true; });
+    }
+  };
+
+  const assertWriteAccess = (action = "") => {
+    if (state.access?.readOnly) throw new Error("Esta terminal está configurada como Solo consulta.");
+    if (ADMIN_ACTIONS.has(action) && !state.access?.isAdmin) throw new Error("Esta operación requiere un administrador.");
   };
 
   async function renderDashboard() {
     const status = await database.getStatus();
     const menu = [
-      ["Ventas", "index.html", "$"], ["Productos", "productos.html", "+"], ["Inventario", "inventario.html", "#"],
-      ["Entradas", "entradas.html", "↓"], ["Caja", "movimientos-caja.html", "$"], ["Cortes", "cortes.html", "▣"],
-      ["Ajustes", "ajustes-inventario.html", "!"], ["Historial", "ventas-historial.html", "◷"], ["Importes", "importes.html", "↻"],
-      ["Fiados", "fiados.html", "$"], ["Promociones", "promociones.html", "%"], ["Traspasos", "traspasos.html", "↔"],
-      ["Reportes", "reportes.html", "◔"], ["Usuarios", "usuarios.html", "@"]
+      ["ventas", "Ventas", "index.html", "$"], ["productos", "Productos", "productos.html", "+"], ["inventario", "Inventario", "inventario.html", "#"],
+      ["entradas", "Entradas", "entradas.html", "↓"], ["caja", "Caja", "movimientos-caja.html", "$"], ["cortes", "Cortes", "cortes.html", "▣"],
+      ["ajustes", "Ajustes", "ajustes-inventario.html", "!"], ["historial", "Historial", "ventas-historial.html", "◷"], ["importes", "Importes", "importes.html", "↻"],
+      ["fiados", "Fiados", "fiados.html", "$"], ["promociones", "Promociones", "promociones.html", "%"], ["traspasos", "Traspasos", "traspasos.html", "↔"],
+      ["reportes", "Reportes", "reportes.html", "◔"], ["usuarios", "Usuarios", "usuarios.html", "@"]
     ];
-    return `${hero("Menú principal", `Hola, ${state.context.user.nombre}`, `${state.context.store.nombre} · ${state.context.terminal?.name || "Terminal local"}`)}
+    const hiddenForEmployee = new Set(["ajustes", "promociones", "reportes", "usuarios"]);
+    const visibleMenu = state.access.isAdmin ? menu : menu.filter(([key]) => !hiddenForEmployee.has(key));
+    return `${hero("Menú principal", `Hola, ${state.context.user.nombre}`, `${state.context.store.nombre} · ${state.access.isAdmin ? "Administrador" : "Empleado"} · ${state.access.readOnly ? "Solo consulta" : "Venta y consulta"}`)}
       <div class="prototype-note live"><span>●</span><span><strong>Base local activa.</strong> Los cambios se guardan en este dispositivo y quedan preparados para sincronización futura.</span></div>
       <div class="stats"><div class="stat"><span>Registros</span><strong>${status.totalRecords}</strong></div><div class="stat"><span>Pendientes de sincronizar</span><strong>${status.outbox}</strong></div></div>
-      <section class="menu-grid">${menu.map(([name, href, icon]) => `<a class="menu-card" href="${href}"><span class="menu-arrow">→</span><span class="menu-icon">${icon}</span><span><strong>${name}</strong><small>Datos locales disponibles</small></span></a>`).join("")}</section>`;
+      <section class="menu-grid">${visibleMenu.map(([, name, href, icon]) => `<a class="menu-card" href="${href}"><span class="menu-arrow">→</span><span class="menu-icon">${icon}</span><span><strong>${name}</strong><small>Datos locales disponibles</small></span></a>`).join("")}</section>`;
   }
 
   async function renderProducts() {
@@ -213,8 +246,10 @@
   }
 
   async function renderUsers() {
-    const users = await database.list("usuarios");
-    return `${hero("Acceso local", "Usuarios", "Usuarios preparados para permisos y sincronización.")}<form class="card stack" data-action="save-user">${field("Nombre", "nombre")}${field("Usuario", "username")}${select("Rol", "rol", [{ value: "empleado", label: "Empleado" }, { value: "administrador", label: "Administrador" }])}${select("Tienda", "tienda_id", storeChoices(state.context.stores), state.context.store.id)}<button class="button full">Agregar usuario</button></form><section class="card"><div class="list">${users.map(user => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(user.nombre)}</strong><span>@${escapeHtml(user.username)} · ${escapeHtml(user.rol)}</span></span><span class="list-item-value">${user.activo === 0 ? badge("Inactivo", "info") : badge("Activo")}</span></div>`).join("")}</div></section>`;
+    const [users, credentials] = await Promise.all([database.list("usuarios"), database.listCredentials()]);
+    const configured = new Set(credentials.map(credential => credential.user_id));
+    const activeUsers = users.filter(user => user.activo !== 0).map(user => ({ value: user.id, label: `${user.nombre} · @${user.username}` }));
+    return `${hero("Acceso local", "Usuarios", "El administrador crea accesos locales para empleados y administradores.")}<form class="card stack" data-action="save-user"><h2>Nuevo usuario</h2>${field("Nombre", "nombre")}${field("Usuario", "username")}${field("Contraseña inicial", "password", { type: "password", minlength: 6 })}${select("Rol", "rol", [{ value: "empleado", label: "Empleado" }, { value: "administrador", label: "Administrador" }])}${select("Tienda", "tienda_id", storeChoices(state.context.stores), state.context.store.id)}<button class="button full">Agregar usuario</button></form><form class="card stack" data-action="change-user-password"><h2>Configurar contraseña local</h2>${select("Usuario", "user_id", activeUsers)}${field("Nueva contraseña", "password", { type: "password", minlength: 6 })}<button class="button secondary full">Guardar contraseña</button></form><section class="card"><div class="list">${users.map(user => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(user.nombre)}</strong><span>@${escapeHtml(user.username)} · ${escapeHtml(user.rol)} · ${configured.has(user.id) ? "Acceso configurado" : "Sin contraseña local"}</span></span><span class="list-item-value">${user.activo === 0 ? badge("Inactivo", "info") : badge("Activo")}</span></div>`).join("")}</div></section>`;
   }
 
   async function renderSales() {
@@ -242,6 +277,10 @@
     if (!operationalScreens.has(screen) || !database || !rules) return;
     try {
       await loadContext();
+      if (ADMIN_SCREENS.has(screen) && !state.access.isAdmin) {
+        renderIntoPage(`${hero("Acceso restringido", "Se requiere administrador", "Tu usuario no tiene permiso para abrir este apartado.")}<a class="button full" href="dashboard.html">Volver al menú</a>`);
+        return;
+      }
       renderIntoPage(await renderers[screen]());
     } catch (error) {
       console.error(error);
@@ -257,6 +296,7 @@
 
   async function handleSubmit(form) {
     const data = values(form);
+    assertWriteAccess(form.dataset.action);
     const now = today();
     if (form.dataset.action === "save-product") {
       const id = data.id || uid();
@@ -332,8 +372,14 @@
       ]);
       toast("Traspaso enviado y descontado de origen.");
     } else if (form.dataset.action === "save-user") {
-      await database.save("usuarios", { nombre: data.nombre.trim(), username: data.username.trim(), rol: data.rol, tienda_id: data.tienda_id, activo: 1 }, realOptions);
+      const duplicate = (await database.list("usuarios")).some(user => String(user.username).toLowerCase() === data.username.trim().toLowerCase());
+      if (duplicate) throw new Error("Ese nombre de usuario ya existe.");
+      const user = await database.save("usuarios", { nombre: data.nombre.trim(), username: data.username.trim(), rol: data.rol, tienda_id: data.tienda_id, activo: 1 }, realOptions);
+      await auth.setPassword(user.id, data.password);
       toast("Usuario guardado.");
+    } else if (form.dataset.action === "change-user-password") {
+      await auth.setPassword(data.user_id, data.password);
+      toast("Contraseña local actualizada.");
     } else if (form.dataset.action === "checkout") {
       await checkout(data);
     }
@@ -378,6 +424,7 @@
   }
 
   async function editProduct(id) {
+    assertWriteAccess("save-product");
     const product = await database.get("productos", id);
     const form = document.querySelector("#product-form");
     if (!form || !product) return;
@@ -394,6 +441,7 @@
   }
 
   async function editStock(id) {
+    assertWriteAccess("save-adjustment");
     const inventory = await database.get("inventario", id);
     if (!inventory) return;
     const minimum = prompt("Existencia mínima", String(inventory.cantidad_minima || 0));
@@ -408,6 +456,7 @@
   }
 
   async function openClient(id) {
+    assertWriteAccess("save-credit-payment");
     const clients = await clientBalances();
     const client = clients.find(record => record.id === id);
     if (!client) return;
@@ -423,6 +472,7 @@
   }
 
   async function returnSale(id) {
+    assertWriteAccess("return-sale");
     if (!confirm("¿Devolver todo el remanente de esta venta y restaurar el inventario?")) return;
     const [sale, details, returns, returnDetails, products] = await Promise.all([database.get("ventas", id), database.list("venta_detalles"), database.list("devoluciones"), database.list("devolucion_detalles"), productMap()]);
     const saleRows = details.filter(detail => detail.venta_id === id);
@@ -454,6 +504,7 @@
   }
 
   async function resolveTransfer(id, action) {
+    assertWriteAccess(action === "cancel" ? "save-transfer" : "receive-transfer");
     const transfer = await database.get("traspasos", id);
     const validation = rules.validateTransferTransition(transfer.estado, action);
     if (!validation.ok) throw new Error(validation.message);
@@ -484,13 +535,14 @@
     if (toggle) { const target = document.getElementById(toggle.dataset.toggle); if (target) target.hidden = !target.hidden; }
     const add = event.target.closest("[data-add-product]");
     if (add) {
+      try { assertWriteAccess("checkout"); } catch (error) { toast(error.message, "error"); return; }
       const line = state.cart.find(item => item.productId === add.dataset.addProduct);
       if (line) line.quantity += 1; else state.cart.push({ productId: add.dataset.addProduct, quantity: 1 });
       sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart));
       render().catch(console.error);
     }
     const remove = event.target.closest("[data-remove-product]");
-    if (remove) { state.cart = state.cart.filter(item => item.productId !== remove.dataset.removeProduct); sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart)); render().catch(console.error); }
+    if (remove) { try { assertWriteAccess("checkout"); } catch (error) { toast(error.message, "error"); return; } state.cart = state.cart.filter(item => item.productId !== remove.dataset.removeProduct); sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart)); render().catch(console.error); }
     const product = event.target.closest("[data-edit-product]");
     if (product) editProduct(product.dataset.editProduct).catch(error => toast(error.message, "error"));
     const stock = event.target.closest("[data-edit-stock]");
