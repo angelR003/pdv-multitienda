@@ -310,7 +310,19 @@
     "traspaso-detalle": traspasoDetallePage, reportes: reportesPage, usuarios: usuariosPage
   };
 
-  app.innerHTML = (renderers[screen] || dashboardPage)();
+  const operationalScreens = new Set([
+    "dashboard", "ventas", "productos", "inventario", "entradas", "caja", "cortes",
+    "ajustes", "historial", "venta-detalle", "importes", "fiados", "promociones",
+    "traspasos", "traspaso-detalle", "reportes", "usuarios"
+  ]);
+  const loadingContent = `<div class="module-loading" role="status" aria-live="polite"><span class="loading-dot" aria-hidden="true"></span><strong>Cargando datos locales…</strong><span>Preparando el módulo en este dispositivo.</span></div>`;
+  if (operationalScreens.has(screen)) {
+    app.innerHTML = screen === "dashboard"
+      ? `<div class="shell">${topbar("PDV Las Gardenias", "Menú principal", null, `<span class="topbar-actions"><a class="icon-button" href="config-terminal.html" aria-label="Configuración">⚙</a><button class="icon-button" type="button" data-logout aria-label="Cerrar sesión">⇥</button></span>`)}<main class="page">${loadingContent}</main>${bottomNav("menu")}</div>`
+      : layout(loadingContent);
+  } else {
+    app.innerHTML = (renderers[screen] || loginPage)();
+  }
 
   const isInstalled = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 

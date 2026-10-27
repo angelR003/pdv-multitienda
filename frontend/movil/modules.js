@@ -6,7 +6,7 @@
   const rules = globalThis.PdvBusinessRules;
   const auth = globalThis.PdvLocalAuth;
   const app = document.querySelector("#app");
-  const state = { context: null, cart: [], access: null };
+  const state = { context: null, cart: [], access: null, searches: {} };
   const ADMIN_SCREENS = new Set(["ajustes", "promociones", "reportes", "usuarios"]);
   const ADMIN_ACTIONS = new Set(["save-product", "save-adjustment", "save-promotion", "save-transfer", "save-user", "change-user-password"]);
   const operationalScreens = new Set([
@@ -31,6 +31,10 @@
   const badge = (text, kind = "") => `<span class="badge ${kind}">${escapeHtml(text)}</span>`;
   const field = (label, name, options = {}) => `<div class="field"><label>${escapeHtml(label)}<input class="input" name="${escapeHtml(name)}" type="${options.type || "text"}" ${options.required === false ? "" : "required"} ${options.step ? `step="${options.step}"` : ""} ${options.min != null ? `min="${options.min}"` : ""} ${options.minlength ? `minlength="${options.minlength}"` : ""} value="${escapeHtml(options.value ?? "")}" placeholder="${escapeHtml(options.placeholder || "")}"></label></div>`;
   const select = (label, name, choices, selected = "") => `<div class="field"><label>${escapeHtml(label)}<select name="${escapeHtml(name)}" required>${choices.map(choice => `<option value="${escapeHtml(choice.value)}" ${String(choice.value) === String(selected) ? "selected" : ""}>${escapeHtml(choice.label)}</option>`).join("")}</select></label></div>`;
+  const normalizeSearch = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const searchField = (scope, placeholder, options = {}) => `<div class="field search-field"><label for="search-${scope}">Buscar por nombre o código de barras</label><div class="search-control"><span aria-hidden="true">⌕</span><input class="input" id="search-${scope}" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(state.searches[scope] || "")}" data-search-scope="${scope}" ${options.selectName ? `data-select-name="${escapeHtml(options.selectName)}"` : ""} ${options.autofocus ? "autofocus" : ""}></div><span class="micro muted" data-search-result="${scope}">Escribe o escanea un código.</span></div>`;
+  const searchableAttributes = (scope, product) => `data-search-item="${scope}" data-search-text="${escapeHtml(normalizeSearch(`${product?.nombre || ""} ${product?.codigo_barras || ""} ${product?.categoria || ""}`))}" data-barcode="${escapeHtml(normalizeSearch(product?.codigo_barras || ""))}"`;
+  const productSelect = (label, name, products) => `<div class="field"><label>${escapeHtml(label)}<select name="${escapeHtml(name)}" required>${products.filter(product => product.activo !== 0).map(product => `<option value="${escapeHtml(product.id)}" data-search-text="${escapeHtml(normalizeSearch(`${product.nombre} ${product.codigo_barras || ""} ${product.categoria || ""}`))}" data-barcode="${escapeHtml(normalizeSearch(product.codigo_barras || ""))}">${escapeHtml(product.nombre)} · ${escapeHtml(product.codigo_barras || "Sin código")}</option>`).join("")}</select></label></div>`;
   const productChoices = products => products.filter(product => product.activo !== 0).map(product => ({ value: product.id, label: `${product.nombre} · ${money(product.precio_global)}` }));
   const storeChoices = stores => stores.filter(store => store.activa !== 0).slice().sort((left, right) => left.nombre.localeCompare(right.nombre, "es", { numeric: true })).map(store => ({ value: store.id, label: store.nombre }));
   const toast = (message, type = "ok") => {
@@ -94,8 +98,34 @@
     const page = app.querySelector(".page");
     if (page) {
       page.innerHTML = `<div id="module-content">${html}</div>`;
+      Object.entries(state.searches).forEach(([scope, query]) => filterScope(scope, query));
       applyAccessUi();
     }
+  };
+
+  const filterScope = (scope, rawQuery) => {
+    const query = normalizeSearch(rawQuery);
+    state.searches[scope] = rawQuery;
+    const input = document.querySelector(`[data-search-scope="${scope}"]`);
+    const items = [...document.querySelectorAll(`[data-search-item="${scope}"]`)];
+    let visible = 0;
+    items.forEach(item => {
+      const matches = !query || item.dataset.searchText.includes(query);
+      item.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    const result = document.querySelector(`[data-search-result="${scope}"]`);
+    if (input?.dataset.selectName) {
+      const selectElement = document.querySelector(`select[name="${input.dataset.selectName}"]`);
+      const options = [...(selectElement?.options || [])];
+      const matches = options.filter(option => !query || option.dataset.searchText?.includes(query));
+      options.forEach(option => { option.hidden = query ? !matches.includes(option) : false; });
+      const exact = matches.find(option => option.dataset.barcode && option.dataset.barcode === query);
+      if (selectElement && (exact || matches[0])) selectElement.value = (exact || matches[0]).value;
+      if (result) result.textContent = matches.length ? `${exact ? "Código encontrado" : "Coincidencias"}: ${matches.length}. Producto seleccionado: ${(exact || matches[0]).textContent}.` : "No se encontró ningún producto.";
+      return;
+    }
+    if (result) result.textContent = query ? `${visible} coincidencia${visible === 1 ? "" : "s"}.` : `${items.length} producto${items.length === 1 ? "" : "s"} disponible${items.length === 1 ? "" : "s"}.`;
   };
 
   const applyAccessUi = () => {
@@ -135,9 +165,10 @@
   async function renderProducts() {
     const products = await database.list("productos");
     return `${hero("Catálogo local", "Productos", "Altas y cambios guardados en el teléfono.")}
+      <section class="card">${searchField("products", "Nombre, categoría o código")}</section>
       <button class="button full" data-toggle="product-form">+ Nuevo producto</button>
       <form class="card stack collapsible" id="product-form" data-action="save-product" hidden>${field("Nombre", "nombre")}${field("Código", "codigo", { required: false })}${field("Categoría", "categoria", { required: false })}<div class="grid-2">${field("Precio", "precio", { type: "number", step: "0.01", min: 0 })}${field("Costo", "costo", { type: "number", step: "0.01", min: 0 })}</div>${select("Unidad", "unidad", [{ value: "pieza", label: "Pieza" }, { value: "kg", label: "Kilogramo" }, { value: "litro", label: "Litro" }])}<label class="check-row"><input type="checkbox" name="retornable"> Producto retornable</label><button class="button full">Guardar producto</button></form>
-      <section class="card"><div class="card-head"><h2>Catálogo</h2>${badge(`${products.length} registros`)}</div><div class="list">${products.length ? products.map(product => `<button class="list-item actionable list-button" data-edit-product="${product.id}"><span class="list-item-main"><strong>${escapeHtml(product.nombre)}</strong><span>${escapeHtml(product.categoria || "Sin categoría")} · ${escapeHtml(product.codigo_barras || "Sin código")}${product.is_demo ? " · Muestra inicial" : ""}</span></span><span class="list-item-value">${money(product.precio_global)}<span>${product.activo === 0 ? "Inactivo" : "Editar →"}</span></span></button>`).join("") : empty("Agrega el primer producto.")}</div></section>`;
+      <section class="card"><div class="card-head"><h2>Catálogo</h2>${badge(`${products.length} registros`)}</div><div class="list">${products.length ? products.map(product => `<button class="list-item actionable list-button" ${searchableAttributes("products", product)} data-edit-product="${product.id}"><span class="list-item-main"><strong>${escapeHtml(product.nombre)}</strong><span>${escapeHtml(product.categoria || "Sin categoría")} · ${escapeHtml(product.codigo_barras || "Sin código")}${product.is_demo ? " · Muestra inicial" : ""}</span></span><span class="list-item-value">${money(product.precio_global)}<span>${product.activo === 0 ? "Inactivo" : "Editar →"}</span></span></button>`).join("") : empty("Agrega el primer producto.")}</div></section>`;
   }
 
   async function renderInventory() {
@@ -145,13 +176,13 @@
     const map = new Map(products.map(product => [product.id, product]));
     const rows = inventory.filter(record => record.tienda_id === state.context.store.id);
     const low = rows.filter(record => Number(record.cantidad_actual) <= Number(record.cantidad_minima || 0)).length;
-    return `${hero(state.context.store.nombre, "Inventario", "Existencias actuales de la base local.")}<div class="stats"><div class="stat"><span>Productos</span><strong>${rows.length}</strong></div><div class="stat"><span>Stock bajo</span><strong>${low}</strong></div></div>
-      <section class="card"><div class="list">${rows.length ? rows.map(record => { const product = map.get(record.producto_id); const isLow = Number(record.cantidad_actual) <= Number(record.cantidad_minima || 0); return `<button class="list-item actionable list-button" data-edit-stock="${record.id}"><span class="list-item-main"><strong>${escapeHtml(product?.nombre || "Producto")}</strong><span>Mín. ${number(record.cantidad_minima)} · Máx. ${number(record.cantidad_maxima)}</span></span><span class="list-item-value">${number(record.cantidad_actual)}<span>${isLow ? badge("Bajo", "danger") : "Editar límites →"}</span></span></button>`; }).join("") : empty("Las entradas crearán las existencias.")}</div></section>`;
+    return `${hero(state.context.store.nombre, "Inventario", "Existencias actuales de la base local.")}<section class="card">${searchField("inventory", "Nombre o código de barras")}</section><div class="stats"><div class="stat"><span>Productos</span><strong>${rows.length}</strong></div><div class="stat"><span>Stock bajo</span><strong>${low}</strong></div></div>
+      <section class="card"><div class="list">${rows.length ? rows.map(record => { const product = map.get(record.producto_id); const isLow = Number(record.cantidad_actual) <= Number(record.cantidad_minima || 0); return `<button class="list-item actionable list-button" ${searchableAttributes("inventory", product)} data-edit-stock="${record.id}"><span class="list-item-main"><strong>${escapeHtml(product?.nombre || "Producto")}</strong><span>${escapeHtml(product?.codigo_barras || "Sin código")} · Mín. ${number(record.cantidad_minima)} · Máx. ${number(record.cantidad_maxima)}</span></span><span class="list-item-value">${number(record.cantidad_actual)}<span>${isLow ? badge("Bajo", "danger") : "Editar límites →"}</span></span></button>`; }).join("") : empty("Las entradas crearán las existencias.")}</div></section>`;
   }
 
   async function renderEntries() {
     const [products, entries] = await Promise.all([database.list("productos"), database.list("entradas_mercancia")]);
-    return `${hero("Mercancía", "Entradas", "Cada entrada aumenta inventario y conserva su costo.")}<form class="card stack" data-action="save-entry">${select("Producto", "producto_id", productChoices(products))}<div class="grid-2">${field("Cantidad", "cantidad", { type: "number", step: "0.001", min: 0.001 })}${field("Costo unitario", "costo", { type: "number", step: "0.01", min: 0 })}</div>${field("Proveedor", "proveedor", { required: false, placeholder: "Opcional" })}<button class="button full">Guardar entrada</button></form><section class="card"><div class="card-head"><h2>Historial</h2>${badge(`${entries.length}`)}</div><div class="list">${entries.length ? entries.slice().reverse().map(entry => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(entry.proveedor || "Entrada de mercancía")}</strong><span>${dateTime(entry.fecha_entrada)}</span></span><span class="list-item-value">${money(entry.total)}</span></div>`).join("") : empty("Todavía no hay entradas.")}</div></section>`;
+    return `${hero("Mercancía", "Entradas", "Cada entrada aumenta inventario y conserva su costo.")}<section class="card">${searchField("entries", "Escanea o escribe el código", { selectName: "producto_id" })}</section><form class="card stack" data-action="save-entry">${productSelect("Producto seleccionado", "producto_id", products)}<div class="grid-2">${field("Cantidad", "cantidad", { type: "number", step: "0.001", min: 0.001 })}${field("Costo unitario", "costo", { type: "number", step: "0.01", min: 0 })}</div>${field("Proveedor", "proveedor", { required: false, placeholder: "Opcional" })}<button class="button full">Guardar entrada</button></form><section class="card"><div class="card-head"><h2>Historial</h2>${badge(`${entries.length}`)}</div><div class="list">${entries.length ? entries.slice().reverse().map(entry => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(entry.proveedor || "Entrada de mercancía")}</strong><span>${dateTime(entry.fecha_entrada)}</span></span><span class="list-item-value">${money(entry.total)}</span></div>`).join("") : empty("Todavía no hay entradas.")}</div></section>`;
   }
 
   async function renderCash() {
@@ -262,7 +293,7 @@
       return { ...line, product, unitPrice: price, subtotal: promo.subtotal };
     });
     const total = rules.roundMoney(lines.reduce((sum, line) => sum + line.subtotal, 0));
-    return `${hero("Venta local", "Nueva venta", "Agrega productos disponibles y registra el cobro en este dispositivo.")}<section class="card"><div class="card-head"><h2>Productos disponibles</h2>${badge(`${products.length}`)}</div><div class="list compact">${products.filter(product => product.activo !== 0).map(product => { const stock = inventory.get(product.id)?.cantidad_actual || 0; return `<button class="list-item actionable list-button" data-add-product="${product.id}" ${stock <= 0 ? "disabled" : ""}><span class="list-item-main"><strong>${escapeHtml(product.nombre)}</strong><span>Stock ${number(stock)}${product.is_demo ? " · Muestra inicial" : ""}</span></span><span class="list-item-value">${money(product.precio_global)}<span>Agregar +</span></span></button>`; }).join("")}</div></section><section class="card"><div class="card-head"><h2>Ticket</h2>${badge(`${lines.length} renglones`)}</div><div class="list">${lines.length ? lines.map(line => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(line.product.nombre)}</strong><span>${number(line.quantity)} × ${money(line.unitPrice)}</span></span><span class="list-item-value">${money(line.subtotal)}<button class="link-button" data-remove-product="${line.productId}">Quitar</button></span></div>`).join("") : empty("Toca un producto para agregarlo.")}</div><div class="total-line"><span>Total</span><strong>${money(total)}</strong></div></section>${lines.length ? `<form class="card stack" data-action="checkout">${select("Forma de pago", "metodo", [{ value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" }, { value: "fiado", label: "Fiado" }])}${clients.length ? select("Cliente para fiado", "cliente_id", [{ value: "", label: "Seleccionar solo si es fiado" }, ...clients.map(client => ({ value: client.id, label: `${client.nombre} · saldo ${money(client.saldo)}` }))]) : ""}<button class="button full">Cobrar ${money(total)}</button></form>` : ""}`;
+    return `${hero("Venta local", "Nueva venta", "Agrega productos disponibles y registra el cobro en este dispositivo.")}<section class="card stack">${searchField("sales", "Escanea o escribe el código", { autofocus: true })}<div class="card-head"><h2>Productos disponibles</h2>${badge(`${products.length}`)}</div><div class="list compact">${products.filter(product => product.activo !== 0).map(product => { const stock = inventory.get(product.id)?.cantidad_actual || 0; return `<button class="list-item actionable list-button" ${searchableAttributes("sales", product)} data-add-product="${product.id}" ${stock <= 0 ? "disabled" : ""}><span class="list-item-main"><strong>${escapeHtml(product.nombre)}</strong><span>${escapeHtml(product.codigo_barras || "Sin código")} · Stock ${number(stock)}${product.is_demo ? " · Muestra inicial" : ""}</span></span><span class="list-item-value">${money(product.precio_global)}<span>Agregar +</span></span></button>`; }).join("")}</div></section><section class="card"><div class="card-head"><h2>Ticket</h2>${badge(`${lines.length} renglones`)}</div><div class="list">${lines.length ? lines.map(line => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(line.product.nombre)}</strong><span>${number(line.quantity)} × ${money(line.unitPrice)}</span></span><span class="list-item-value">${money(line.subtotal)}<button class="link-button" data-remove-product="${line.productId}">Quitar</button></span></div>`).join("") : empty("Busca o escanea un producto para agregarlo.")}</div><div class="total-line"><span>Total</span><strong>${money(total)}</strong></div></section>${lines.length ? `<form class="card stack" data-action="checkout">${select("Forma de pago", "metodo", [{ value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" }, { value: "fiado", label: "Fiado" }])}${clients.length ? select("Cliente para fiado", "cliente_id", [{ value: "", label: "Seleccionar solo si es fiado" }, ...clients.map(client => ({ value: client.id, label: `${client.nombre} · saldo ${money(client.saldo)}` }))]) : ""}<button class="button full">Cobrar ${money(total)}</button></form>` : ""}`;
   }
 
   const renderers = {
@@ -521,6 +552,40 @@
     await render();
   }
 
+  const addProductToCart = productId => {
+    assertWriteAccess("checkout");
+    const line = state.cart.find(item => item.productId === productId);
+    if (line) line.quantity += 1;
+    else state.cart.push({ productId, quantity: 1 });
+    state.searches.sales = "";
+    sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart));
+    render().catch(console.error);
+  };
+
+  document.addEventListener("input", event => {
+    const input = event.target.closest("[data-search-scope]");
+    if (input) filterScope(input.dataset.searchScope, input.value);
+  });
+
+  document.addEventListener("keydown", event => {
+    const input = event.target.closest('[data-search-scope="sales"]');
+    if (!input || event.key !== "Enter") return;
+    event.preventDefault();
+    const query = normalizeSearch(input.value);
+    const candidates = [...document.querySelectorAll('[data-search-item="sales"]')].filter(item => !item.hidden);
+    const target = candidates.find(item => item.dataset.barcode && item.dataset.barcode === query) || (candidates.length === 1 ? candidates[0] : null);
+    if (!target) {
+      toast("Escribe o escanea un código exacto para agregar el producto.", "error");
+      return;
+    }
+    if (target.disabled) {
+      toast("El producto no tiene existencia disponible.", "error");
+      return;
+    }
+    try { addProductToCart(target.dataset.addProduct); }
+    catch (error) { toast(error.message, "error"); }
+  });
+
   document.addEventListener("submit", event => {
     const form = event.target.closest("form[data-action]");
     if (!form) return;
@@ -535,11 +600,8 @@
     if (toggle) { const target = document.getElementById(toggle.dataset.toggle); if (target) target.hidden = !target.hidden; }
     const add = event.target.closest("[data-add-product]");
     if (add) {
-      try { assertWriteAccess("checkout"); } catch (error) { toast(error.message, "error"); return; }
-      const line = state.cart.find(item => item.productId === add.dataset.addProduct);
-      if (line) line.quantity += 1; else state.cart.push({ productId: add.dataset.addProduct, quantity: 1 });
-      sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart));
-      render().catch(console.error);
+      try { addProductToCart(add.dataset.addProduct); }
+      catch (error) { toast(error.message, "error"); }
     }
     const remove = event.target.closest("[data-remove-product]");
     if (remove) { try { assertWriteAccess("checkout"); } catch (error) { toast(error.message, "error"); return; } state.cart = state.cart.filter(item => item.productId !== remove.dataset.removeProduct); sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart)); render().catch(console.error); }
