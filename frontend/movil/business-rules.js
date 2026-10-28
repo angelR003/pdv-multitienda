@@ -177,6 +177,74 @@
 
   const canViewUserRecord = ({ isAdmin = false, currentUserId, recordUserId }) => Boolean(isAdmin) || (Boolean(currentUserId) && currentUserId === recordUserId);
 
+  const CASH_IN_TYPES = new Set(["fondo_inicial", "entrada_dinero", "ajuste", "entrada"]);
+  const CASH_OUT_TYPES = new Set(["salida_dinero", "pago_proveedor", "retiro"]);
+  const cashMovementDirection = type => CASH_IN_TYPES.has(type) ? 1 : CASH_OUT_TYPES.has(type) ? -1 : 0;
+
+  const recordTimestamp = value => {
+    const text = String(value || "");
+    if (!text) return 0;
+    const normalized = /[zZ]|[+-]\d{2}:?\d{2}$/.test(text) ? text : `${text.replace(" ", "T")}Z`;
+    const timestamp = Date.parse(normalized);
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  };
+
+  const calculateCashCut = ({ sales = [], payments = [], movements = [], returns = [], cuts = [], storeId, userId, until = new Date().toISOString() }) => {
+    const relevantCuts = cuts.filter(cut => cut.tienda_id === storeId && cut.usuario_id === userId);
+    const latestCut = relevantCuts.sort((left, right) => recordTimestamp(right.fecha_corte) - recordTimestamp(left.fecha_corte))[0];
+    const since = latestCut?.fecha_corte || "2000-01-01T00:00:00.000Z";
+    const sinceTime = recordTimestamp(since);
+    const untilTime = recordTimestamp(until);
+    const inPeriod = value => {
+      const timestamp = recordTimestamp(value);
+      return timestamp > sinceTime && timestamp <= untilTime;
+    };
+    const scopedSales = sales.filter(sale => sale.tienda_id === storeId && sale.usuario_id === userId && sale.estado !== "cancelada" && inPeriod(sale.fecha_venta));
+    const saleIds = new Set(scopedSales.map(sale => sale.id));
+    const saleById = new Map(sales.map(sale => [sale.id, sale]));
+    const totals = { efectivo: 0, transferencia: 0, fiado: 0 };
+    scopedSales.forEach(sale => {
+      const method = sale.metodo_pago || sale.metodo;
+      if (method !== "mixto" && Object.hasOwn(totals, method)) totals[method] += Number(sale.total || 0);
+    });
+    payments.filter(payment => saleIds.has(payment.venta_id)).forEach(payment => {
+      const sale = scopedSales.find(record => record.id === payment.venta_id);
+      if ((sale?.metodo_pago || sale?.metodo) !== "mixto") return;
+      const method = payment.metodo || payment.metodo_pago;
+      if (Object.hasOwn(totals, method)) totals[method] += Number(payment.monto || 0);
+    });
+    const scopedReturns = returns.filter(record => record.tienda_id === storeId && record.usuario_id === userId && inPeriod(record.fecha_devolucion));
+    const cashReturnRecords = scopedReturns.filter(record => {
+      const sale = saleById.get(record.venta_id);
+      return (sale?.metodo_pago || sale?.metodo) === "efectivo";
+    });
+    const cashReturns = cashReturnRecords.reduce((sum, record) => sum + Number(record.total ?? record.total_devuelto ?? 0), 0);
+    const scopedMovements = movements.filter(record => record.tienda_id === storeId && record.usuario_id === userId && inPeriod(record.fecha_movimiento) && String(record.concepto || record.motivo || "") !== "Venta mixta efectivo");
+    let cashEntries = 0;
+    let cashExits = 0;
+    scopedMovements.forEach(record => {
+      const direction = cashMovementDirection(record.tipo_movimiento);
+      if (direction > 0) cashEntries += Number(record.monto || 0);
+      if (direction < 0) cashExits += Number(record.monto || 0);
+    });
+    const roundTotals = Object.fromEntries(Object.entries(totals).map(([method, value]) => [method, roundMoney(value)]));
+    return {
+      since,
+      until,
+      sales: scopedSales,
+      movements: scopedMovements,
+      returns: cashReturnRecords,
+      salesTotal: roundMoney(scopedSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0)),
+      cashSales: roundTotals.efectivo,
+      transferSales: roundTotals.transferencia,
+      creditSales: roundTotals.fiado,
+      cashReturns: roundMoney(cashReturns),
+      cashEntries: roundMoney(cashEntries),
+      cashExits: roundMoney(cashExits),
+      expected: roundMoney(roundTotals.efectivo - cashReturns + cashEntries - cashExits)
+    };
+  };
+
   const validateCredit = ({ active, limit, currentDebt, charge, administratorOverride = false }) => {
     if (Number(active) !== 1) return result(false, "INACTIVE_CUSTOMER", "El cliente está inactivo.");
     const creditLimit = roundMoney(limit);
@@ -224,6 +292,8 @@
     RECHARGE_AMOUNTS,
     calculateRecharge,
     canViewUserRecord,
+    cashMovementDirection,
+    calculateCashCut,
     RULES_VERSION,
     MONEY_EPSILON,
     INVENTORY_EPSILON,

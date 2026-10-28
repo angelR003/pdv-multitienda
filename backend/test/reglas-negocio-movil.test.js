@@ -48,6 +48,39 @@ test("un empleado solo ve sus registros y un administrador puede verlos todos", 
   assert.equal(rules.canViewUserRecord({ isAdmin: true, currentUserId: "admin", recordUserId: "empleado-2" }), true);
 });
 
+test("el corte usa solo operaciones propias posteriores al último corte", () => {
+  const summary = rules.calculateCashCut({
+    storeId: "tienda-1",
+    userId: "empleado-1",
+    until: "2026-10-27T20:00:00.000Z",
+    cuts: [{ tienda_id: "tienda-1", usuario_id: "empleado-1", fecha_corte: "2026-10-27T10:00:00.000Z" }],
+    sales: [
+      { id: "efectivo", tienda_id: "tienda-1", usuario_id: "empleado-1", metodo_pago: "efectivo", total: 100, estado: "completada", fecha_venta: "2026-10-27T11:00:00.000Z" },
+      { id: "transferencia", tienda_id: "tienda-1", usuario_id: "empleado-1", metodo_pago: "transferencia", total: 80, estado: "completada", fecha_venta: "2026-10-27T12:00:00.000Z" },
+      { id: "fiado", tienda_id: "tienda-1", usuario_id: "empleado-1", metodo_pago: "fiado", total: 50, estado: "completada", fecha_venta: "2026-10-27T13:00:00.000Z" },
+      { id: "ajena", tienda_id: "tienda-1", usuario_id: "empleado-2", metodo_pago: "efectivo", total: 999, estado: "completada", fecha_venta: "2026-10-27T14:00:00.000Z" },
+      { id: "anterior", tienda_id: "tienda-1", usuario_id: "empleado-1", metodo_pago: "efectivo", total: 999, estado: "completada", fecha_venta: "2026-10-27T09:00:00.000Z" }
+    ],
+    movements: [
+      { id: "fondo", tienda_id: "tienda-1", usuario_id: "empleado-1", tipo_movimiento: "fondo_inicial", monto: 200, fecha_movimiento: "2026-10-27T10:30:00.000Z" },
+      { id: "retiro", tienda_id: "tienda-1", usuario_id: "empleado-1", tipo_movimiento: "retiro", monto: 30, fecha_movimiento: "2026-10-27T15:00:00.000Z" }
+    ],
+    returns: [
+      { id: "devolucion", venta_id: "efectivo", tienda_id: "tienda-1", usuario_id: "empleado-1", total: 20, fecha_devolucion: "2026-10-27T16:00:00.000Z" },
+      { id: "devolucion-ajena", venta_id: "ajena", tienda_id: "tienda-1", usuario_id: "empleado-1", total: 10, fecha_devolucion: "2026-10-27T17:00:00.000Z" }
+    ]
+  });
+  assert.equal(summary.salesTotal, 230);
+  assert.equal(summary.cashSales, 100);
+  assert.equal(summary.transferSales, 80);
+  assert.equal(summary.creditSales, 50);
+  assert.equal(summary.cashReturns, 30);
+  assert.equal(summary.cashEntries, 200);
+  assert.equal(summary.cashExits, 30);
+  assert.equal(summary.expected, 240);
+  assert.deepEqual(summary.sales.map(sale => sale.id), ["efectivo", "transferencia", "fiado"]);
+});
+
 test("pago mixto debe cuadrar y requiere cliente para fiado", () => {
   assert.equal(rules.validateMixedPayment({ efectivo: 50, transferencia: 40, fiado: 10 }, 100).code, "CREDIT_CUSTOMER_REQUIRED");
   assert.equal(rules.validateMixedPayment({ efectivo: 50, transferencia: 40, fiado: 10, cliente_fiado_id: "cliente" }, 100).ok, true);

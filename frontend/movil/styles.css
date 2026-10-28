@@ -265,6 +265,16 @@ body.dialog-open { overflow: hidden; }
 .recharge-button { display: grid; min-height: 66px; place-content: center; gap: 3px; padding: 9px 5px; border: 1px solid var(--line); border-radius: 15px; background: #0c110e; color: var(--text); text-align: center; cursor: pointer; }
 .recharge-button strong { color: var(--green); font-size: 1rem; }
 .recharge-button span { color: var(--muted); font-size: .66rem; }
+.cut-card { padding: 0; overflow: hidden; }
+.cut-card summary { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; cursor: pointer; list-style: none; }
+.cut-card summary::-webkit-details-marker { display: none; }
+.cut-card summary > span { display: grid; gap: 3px; }
+.cut-card summary > span:last-child { color: var(--green); font-weight: 800; text-align: right; }
+.cut-card summary small { color: var(--muted); font-weight: 500; }
+.cut-card[open] summary { border-bottom: 1px solid var(--line); background: rgba(53,208,127,.06); }
+.cut-card > .stats, .cut-card > .cut-breakdown { margin: 14px; }
+.cut-breakdown { display: grid; gap: 12px; }
+.cut-breakdown h3 { margin-top: 6px; font-size: .9rem; }
 
 .bar-chart { display: flex; height: 150px; align-items: flex-end; gap: 9px; padding-top: 12px; }
 .bar { display: grid; min-width: 0; flex: 1; place-items: end center; gap: 6px; color: var(--muted); font-size: .65rem; }

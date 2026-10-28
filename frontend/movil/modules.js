@@ -40,6 +40,7 @@
   const productSelect = (label, name, products) => `<div class="field"><label>${escapeHtml(label)}<select name="${escapeHtml(name)}" required>${products.filter(product => product.activo !== 0).map(product => `<option value="${escapeHtml(product.id)}" data-search-text="${escapeHtml(normalizeSearch(`${product.nombre} ${product.codigo_barras || ""} ${product.categoria || ""}`))}" data-barcode="${escapeHtml(normalizeSearch(product.codigo_barras || ""))}">${escapeHtml(product.nombre)} · ${escapeHtml(product.codigo_barras || "Sin código")}</option>`).join("")}</select></label></div>`;
   const productChoices = products => products.filter(product => product.activo !== 0).map(product => ({ value: product.id, label: `${product.nombre} · ${money(product.precio_global)}` }));
   const storeChoices = stores => stores.filter(store => store.activa !== 0).slice().sort((left, right) => left.nombre.localeCompare(right.nombre, "es", { numeric: true })).map(store => ({ value: store.id, label: store.nombre }));
+  const movementNames = { fondo_inicial: "Fondo inicial", entrada_dinero: "Entrada de dinero", entrada: "Entrada de dinero", salida_dinero: "Salida de dinero", pago_proveedor: "Pago a proveedor", retiro: "Retiro", ajuste: "Ajuste" };
   const toast = (message, type = "ok") => {
     let element = document.querySelector("#app-toast");
     if (!element) {
@@ -196,28 +197,35 @@
   }
 
   async function renderCash() {
-    const movements = (await database.list("movimientos_caja")).filter(record => record.tienda_id === state.context.store.id);
-    const balance = movements.reduce((sum, movement) => sum + (movement.tipo_movimiento === "retiro" ? -1 : 1) * Number(movement.monto || 0), 0);
-    return `${hero("Efectivo local", "Movimientos de caja", "Entradas y retiros quedan registrados con usuario y hora.")}<div class="stats"><div class="stat"><span>Saldo registrado</span><strong>${money(balance)}</strong></div><div class="stat"><span>Movimientos</span><strong>${movements.length}</strong></div></div><form class="card stack" data-action="save-cash">${select("Tipo", "tipo", [{ value: "entrada", label: "Entrada" }, { value: "retiro", label: "Retiro" }])}${field("Importe", "monto", { type: "number", step: "0.01", min: 0.01 })}${field("Motivo", "motivo")}<button class="button full">Guardar movimiento</button></form><section class="card"><div class="list">${movements.length ? movements.slice().reverse().map(movement => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(movement.motivo)}</strong><span>${dateTime(movement.fecha_movimiento)}</span></span><span class="list-item-value">${movement.tipo_movimiento === "retiro" ? "−" : "+"} ${money(movement.monto)}</span></div>`).join("") : empty("Todavía no hay movimientos.")}</div></section>`;
+    const allMovements = (await database.list("movimientos_caja")).filter(record => record.tienda_id === state.context.store.id);
+    const movements = allMovements.filter(record => rules.canViewUserRecord({ isAdmin: state.access.isAdmin, currentUserId: state.context.user.id, recordUserId: record.usuario_id }));
+    const balance = movements.reduce((sum, movement) => sum + rules.cashMovementDirection(movement.tipo_movimiento) * Number(movement.monto || 0), 0);
+    return `${hero("Efectivo local", "Movimientos de caja", "El fondo inicial abre el periodo; entradas y salidas formarán parte del siguiente corte.")}<div class="stats"><div class="stat"><span>Movimientos visibles</span><strong>${money(balance)}</strong></div><div class="stat"><span>Registros</span><strong>${movements.length}</strong></div></div><form class="card stack" data-action="save-cash">${select("Tipo", "tipo", [{ value: "fondo_inicial", label: "Fondo inicial / apertura" }, { value: "entrada_dinero", label: "Entrada de dinero" }, { value: "salida_dinero", label: "Salida de dinero" }, { value: "pago_proveedor", label: "Pago a proveedor" }, { value: "retiro", label: "Retiro" }, { value: "ajuste", label: "Ajuste" }])}${field("Importe", "monto", { type: "number", step: "0.01", min: 0.01 })}${field("Concepto", "concepto")}${field("Observaciones", "observaciones", { required: false })}<button class="button full">Registrar movimiento</button></form><section class="card"><div class="list">${movements.length ? movements.slice().sort((left, right) => Date.parse(right.fecha_movimiento) - Date.parse(left.fecha_movimiento)).map(movement => { const direction = rules.cashMovementDirection(movement.tipo_movimiento); return `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(movement.concepto || movement.motivo || movementNames[movement.tipo_movimiento] || "Movimiento")}</strong><span>${escapeHtml(movementNames[movement.tipo_movimiento] || movement.tipo_movimiento)} · ${dateTime(movement.fecha_movimiento)}</span></span><span class="list-item-value">${direction < 0 ? "−" : "+"} ${money(movement.monto)}</span></div>`; }).join("") : empty("Todavía no hay movimientos.")}</div></section>`;
   }
 
-  async function cashSummary() {
-    const [sales, movements] = await Promise.all([database.list("ventas"), database.list("movimientos_caja")]);
-    const belongsToCurrentCut = record => rules.canViewUserRecord({ isAdmin: state.access.isAdmin, currentUserId: state.context.user.id, recordUserId: record.usuario_id });
-    const storeSales = sales.filter(record => record.tienda_id === state.context.store.id && record.estado !== "cancelada" && belongsToCurrentCut(record));
-    const storeMoves = movements.filter(record => record.tienda_id === state.context.store.id && belongsToCurrentCut(record));
-    const salesTotal = storeSales.reduce((sum, record) => sum + Number(record.total || 0), 0);
-    const movementsTotal = storeMoves.reduce((sum, record) => sum + (record.tipo_movimiento === "retiro" ? -1 : 1) * Number(record.monto || 0), 0);
-    return { salesTotal, movementsTotal, expected: salesTotal + movementsTotal };
+  async function cashSummary(until = today()) {
+    const [sales, payments, movements, returns, cuts] = await Promise.all([database.list("ventas"), database.list("venta_pagos"), database.list("movimientos_caja"), database.list("devoluciones"), database.list("cortes_caja")]);
+    return rules.calculateCashCut({ sales, payments, movements, returns, cuts, storeId: state.context.store.id, userId: state.context.user.id, until });
   }
 
   async function renderCuts() {
-    const [summary, allCuts] = await Promise.all([cashSummary(), database.list("cortes_caja")]);
+    const [summary, allCuts, sales, movements, returns] = await Promise.all([cashSummary(), database.list("cortes_caja"), database.list("ventas"), database.list("movimientos_caja"), database.list("devoluciones")]);
     const cuts = allCuts.filter(cut => rules.canViewUserRecord({ isAdmin: state.access.isAdmin, currentUserId: state.context.user.id, recordUserId: cut.usuario_id }));
     const userNames = new Map(state.context.users.map(user => [user.id, user.nombre]));
     const storeNames = new Map(state.context.stores.map(store => [store.id, store.nombre]));
-    const scopeDescription = state.access.isAdmin ? "Puedes revisar los cortes de todos los usuarios y sucursales." : "Solo se muestran tus ventas, movimientos y cortes.";
-    return `${hero("Arqueo local", "Cortes", scopeDescription)}<div class="stats"><div class="stat"><span>Ventas</span><strong>${money(summary.salesTotal)}</strong></div><div class="stat"><span>Esperado</span><strong>${money(summary.expected)}</strong></div></div><form class="card stack" data-action="save-cut">${field("Efectivo contado", "contado", { type: "number", step: "0.01", min: 0 })}<button class="button full">Registrar corte</button></form><section class="card"><div class="list">${cuts.length ? cuts.slice().reverse().map(cut => `<div class="list-item"><span class="list-item-main"><strong>Corte ${escapeHtml(cut.folio || cut.id.slice(0, 8))}</strong><span>${dateTime(cut.fecha_corte)} · ${escapeHtml(userNames.get(cut.usuario_id) || "Usuario")} · ${escapeHtml(storeNames.get(cut.tienda_id) || "Sucursal")} · Diferencia ${money(cut.diferencia)}</span></span><span class="list-item-value">${money(cut.efectivo_contado)}</span></div>`).join("") : empty(state.access.isAdmin ? "Todavía no hay cortes." : "Todavía no has registrado cortes.")}</div></section>`;
+    const scopeDescription = state.access.isAdmin ? "Tu corte usa solo tu turno; además puedes revisar los cortes de todos los usuarios." : "El corte usa únicamente tus operaciones posteriores a tu último cierre.";
+    const detailForCut = cut => {
+      const saleIds = new Set(cut.venta_ids || []);
+      const movementIds = new Set(cut.movimiento_ids || []);
+      const returnIds = new Set(cut.devolucion_ids || []);
+      const cutSales = sales.filter(record => saleIds.has(record.id));
+      const cutMovements = movements.filter(record => movementIds.has(record.id));
+      const cutReturns = returns.filter(record => returnIds.has(record.id));
+      if (!saleIds.size && !movementIds.size && !returnIds.size) return `<p class="muted small">Este corte proviene de una versión anterior y no contiene el desglose de operaciones.</p>`;
+      return `<div class="cut-breakdown"><h3>Ventas incluidas</h3><div class="list">${cutSales.length ? cutSales.map(sale => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(sale.folio || "Venta")}</strong><span>${dateTime(sale.fecha_venta)} · ${escapeHtml(sale.metodo_pago || "Pago")}</span></span><span class="list-item-value">${money(sale.total)}</span></div>`).join("") : empty("Sin ventas en este corte.")}</div><h3>Movimientos de caja</h3><div class="list">${cutMovements.length ? cutMovements.map(record => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(record.concepto || record.motivo || "Movimiento")}</strong><span>${escapeHtml(movementNames[record.tipo_movimiento] || record.tipo_movimiento)} · ${dateTime(record.fecha_movimiento)}</span></span><span class="list-item-value">${rules.cashMovementDirection(record.tipo_movimiento) < 0 ? "−" : "+"} ${money(record.monto)}</span></div>`).join("") : empty("Sin movimientos adicionales.")}</div><h3>Devoluciones en efectivo</h3><div class="list">${cutReturns.length ? cutReturns.map(record => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(record.motivo || "Devolución")}</strong><span>${dateTime(record.fecha_devolucion)}</span></span><span class="list-item-value">− ${money(record.total ?? record.total_devuelto)}</span></div>`).join("") : empty("Sin devoluciones en efectivo.")}</div></div>`;
+    };
+    const cutCards = cuts.slice().sort((left, right) => Date.parse(right.fecha_corte) - Date.parse(left.fecha_corte)).map(cut => { const expected = cut.dinero_esperado ?? cut.efectivo_esperado ?? 0; const counted = cut.dinero_real ?? cut.efectivo_contado ?? 0; return `<details class="card cut-card"><summary><span><strong>Corte ${escapeHtml(cut.folio || cut.id.slice(0, 8))}</strong><small>${dateTime(cut.fecha_corte)} · ${escapeHtml(userNames.get(cut.usuario_id) || "Usuario")} · ${escapeHtml(storeNames.get(cut.tienda_id) || "Sucursal")}</small></span><span>${money(counted)} · ${Number(cut.diferencia || 0) < 0 ? "Faltante" : Number(cut.diferencia || 0) > 0 ? "Sobrante" : "Correcto"}</span></summary><div class="stats"><div class="stat"><span>Efectivo esperado</span><strong>${money(expected)}</strong></div><div class="stat"><span>Contado</span><strong>${money(counted)}</strong></div><div class="stat"><span>Diferencia</span><strong>${money(cut.diferencia)}</strong></div></div>${detailForCut(cut)}</details>`; }).join("");
+    return `${hero("Arqueo local", "Cortes", scopeDescription)}<p class="muted small">Periodo actual desde ${dateTime(summary.since)}.</p><div class="stats"><div class="stat"><span>Ventas totales</span><strong>${money(summary.salesTotal)}</strong></div><div class="stat"><span>Efectivo</span><strong>${money(summary.cashSales)}</strong></div><div class="stat"><span>Transferencia</span><strong>${money(summary.transferSales)}</strong></div><div class="stat"><span>Fiado</span><strong>${money(summary.creditSales)}</strong></div><div class="stat"><span>Entradas</span><strong>${money(summary.cashEntries)}</strong></div><div class="stat"><span>Salidas y devoluciones</span><strong>${money(summary.cashExits + summary.cashReturns)}</strong></div><div class="stat"><span>Efectivo esperado</span><strong>${money(summary.expected)}</strong></div></div><form class="card stack" data-action="save-cut">${field("Efectivo contado", "contado", { type: "number", step: "0.01", min: 0 })}${field("Observaciones", "observaciones", { required: false })}<button class="button full">Cerrar turno y registrar corte</button></form><section><div class="card-head"><h2>Historial de cortes</h2>${badge(`${cuts.length}`)}</div>${cutCards || empty(state.access.isAdmin ? "Todavía no hay cortes." : "Todavía no has registrado cortes.")}</section>`;
   }
 
   async function renderAdjustments() {
@@ -385,13 +393,18 @@
       ]);
       toast("Entrada e inventario actualizados.");
     } else if (form.dataset.action === "save-cash") {
-      await database.save("movimientos_caja", { tipo_movimiento: data.tipo, monto: Number(data.monto), motivo: data.motivo.trim(), tienda_id: state.context.store.id, usuario_id: state.context.user.id, fecha_movimiento: now }, realOptions);
+      if (data.tipo === "fondo_inicial") {
+        const summary = await cashSummary(now);
+        if (summary.movements.some(record => record.tipo_movimiento === "fondo_inicial")) throw new Error("Ya registraste el fondo inicial de este turno.");
+      }
+      await database.save("movimientos_caja", { tipo_movimiento: data.tipo, monto: Number(data.monto), concepto: data.concepto.trim(), motivo: data.concepto.trim(), observaciones: data.observaciones.trim(), tienda_id: state.context.store.id, usuario_id: state.context.user.id, fecha_movimiento: now }, realOptions);
       toast("Movimiento de caja guardado.");
     } else if (form.dataset.action === "save-cut") {
-      const summary = await cashSummary();
+      const summary = await cashSummary(now);
       const counted = Number(data.contado);
-      await database.save("cortes_caja", { folio: `C-${Date.now().toString().slice(-6)}`, tienda_id: state.context.store.id, usuario_id: state.context.user.id, fecha_corte: now, ventas_total: summary.salesTotal, efectivo_esperado: summary.expected, efectivo_contado: counted, diferencia: rules.roundMoney(counted - summary.expected) }, realOptions);
-      toast("Corte registrado.");
+      if (!confirm(`Se cerrará tu turno.\n\nEfectivo contado: ${money(counted)}\n\nDespués del cierre estas operaciones ya no formarán parte de otro corte. ¿Continuar?`)) return;
+      await database.save("cortes_caja", { folio: `C-${Date.now().toString().slice(-6)}`, tienda_id: state.context.store.id, usuario_id: state.context.user.id, fecha_corte: now, desde: summary.since, ventas_total: summary.salesTotal, total_efectivo: summary.cashSales, total_transferencia: summary.transferSales, total_fiado: summary.creditSales, total_gastos: summary.cashExits, total_devoluciones: summary.cashReturns, entradas_caja: summary.cashEntries, dinero_esperado: summary.expected, dinero_real: counted, efectivo_esperado: summary.expected, efectivo_contado: counted, diferencia: rules.roundMoney(counted - summary.expected), observaciones: data.observaciones.trim(), venta_ids: summary.sales.map(record => record.id), movimiento_ids: summary.movements.map(record => record.id), devolucion_ids: summary.returns.map(record => record.id) }, realOptions);
+      toast("Turno cerrado y corte registrado.");
     } else if (form.dataset.action === "save-adjustment") {
       const inventory = await ensureInventory(data.producto_id);
       const next = Number(data.cantidad);
@@ -542,7 +555,7 @@
     const value = Number(amount);
     await database.batch([
       { store: "abonos_fiado", payload: { cliente_id: client.id, usuario_id: state.context.user.id, tienda_id: state.context.store.id, monto: value, fecha_abono: today(), operation_id: uid() }, options: realOptions },
-      { store: "movimientos_caja", payload: { tienda_id: state.context.store.id, usuario_id: state.context.user.id, tipo_movimiento: "entrada", monto: value, motivo: `Abono de ${client.nombre}`, fecha_movimiento: today() }, options: realOptions }
+      { store: "movimientos_caja", payload: { tienda_id: state.context.store.id, usuario_id: state.context.user.id, tipo_movimiento: "entrada_dinero", monto: value, concepto: `Abono de ${client.nombre}`, motivo: `Abono de ${client.nombre}`, fecha_movimiento: today() }, options: realOptions }
     ]);
     toast("Abono y entrada de caja guardados.");
     await render();
