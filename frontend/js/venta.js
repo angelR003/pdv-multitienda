@@ -546,7 +546,7 @@ function cerrarModalManual() {
 function renderBotonesRecarga() {
   if (!montosRecarga) return;
 
-  const montos = [10, 15, 20, 25, 30, 50, 100, 200, 500];
+  const montos = [10, 20, 30, 50, 80, 100, 200, 300, 500];
   montosRecarga.innerHTML = "";
 
   montos.forEach((monto) => {
@@ -556,7 +556,7 @@ function renderBotonesRecarga() {
     button.style.cssText = "border: 1px solid #3f3f46; border-radius: 12px; padding: 12px 8px; background: #09090b; font-weight: 900;";
     button.innerHTML = `
       <span class="block text-xl">$${monto}</span>
-      <span class="block text-xs text-zinc-400">cobra $${(monto + 1).toFixed(2)}</span>
+      <span class="block text-xs text-zinc-400">cobra $${(monto + 2).toFixed(2)}</span>
     `;
     button.addEventListener("click", () => agregarServicioAlCarrito("recarga", monto));
     montosRecarga.appendChild(button);
@@ -592,7 +592,7 @@ function mostrarPanelServicioElectronico(tipo) {
 
 function agregarServicioAlCarrito(tipo, montoBase) {
   const monto = redondearCentavos(montoBase);
-  const comision = tipo === "recarga" ? 1 : 0;
+  const comision = tipo === "recarga" ? 2 : 0;
   const total = redondearCentavos(monto + comision);
   const nombre = tipo === "recarga"
     ? `Recarga $${monto.toFixed(2)}`

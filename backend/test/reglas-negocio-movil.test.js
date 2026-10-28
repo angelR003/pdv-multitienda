@@ -32,6 +32,22 @@ test("promociones eligen la combinación más barata", () => {
   assert.equal(promotion.promotedQuantity, 6);
 });
 
+test("recargas aceptan montos autorizados y suman dos pesos de importe", () => {
+  assert.deepEqual(rules.RECHARGE_AMOUNTS, [10, 20, 30, 50, 80, 100, 200, 300, 500]);
+  const recharge = rules.calculateRecharge(80, 2);
+  assert.equal(recharge.ok, true);
+  assert.equal(recharge.amount, 80);
+  assert.equal(recharge.fee, 2);
+  assert.equal(recharge.total, 82);
+  assert.equal(rules.calculateRecharge(15, 2).code, "INVALID_RECHARGE_AMOUNT");
+});
+
+test("un empleado solo ve sus registros y un administrador puede verlos todos", () => {
+  assert.equal(rules.canViewUserRecord({ currentUserId: "empleado-1", recordUserId: "empleado-1" }), true);
+  assert.equal(rules.canViewUserRecord({ currentUserId: "empleado-1", recordUserId: "empleado-2" }), false);
+  assert.equal(rules.canViewUserRecord({ isAdmin: true, currentUserId: "admin", recordUserId: "empleado-2" }), true);
+});
+
 test("pago mixto debe cuadrar y requiere cliente para fiado", () => {
   assert.equal(rules.validateMixedPayment({ efectivo: 50, transferencia: 40, fiado: 10 }, 100).code, "CREDIT_CUSTOMER_REQUIRED");
   assert.equal(rules.validateMixedPayment({ efectivo: 50, transferencia: 40, fiado: 10, cliente_fiado_id: "cliente" }, 100).ok, true);

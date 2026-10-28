@@ -4,6 +4,7 @@ const {
   esProductoAGranel,
 } = require("../../../frontend/js/redondeo-operativo");
 const { calcularImporteEnvase } = require("../utils/importes-envases");
+const { prepararRecarga } = require("../utils/recargas");
 const {
   descontarInventario,
   resolverImpactoInventario,
@@ -199,8 +200,10 @@ const prepararServiciosVenta = (servicios = []) => {
       };
     }
 
-    const comision = tipo === "recarga" ? 1 : 0;
-    const totalCobrado = redondearCentavos(montoBase + comision);
+    const recarga = tipo === "recarga" ? prepararRecarga(montoBase) : null;
+    if (recarga?.error) return { error: recarga.error };
+    const comision = recarga?.comision || 0;
+    const totalCobrado = recarga?.total_cobrado || montoBase;
     const descripcion =
       tipo === "recarga"
         ? `Recarga $${montoBase.toFixed(2)}`

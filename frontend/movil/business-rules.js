@@ -157,6 +157,26 @@
     return result(true, null, "", { payment: { efectivo: cash, transferencia: transfer, fiado: credit, cliente_fiado_id: payment?.cliente_fiado_id || null } });
   };
 
+  const RECHARGE_AMOUNTS = Object.freeze([10, 20, 30, 50, 80, 100, 200, 300, 500]);
+
+  const calculateRecharge = (amount, fee = 2) => {
+    const baseAmount = roundMoney(amount);
+    const commission = roundMoney(fee);
+    if (!RECHARGE_AMOUNTS.includes(baseAmount)) {
+      return result(false, "INVALID_RECHARGE_AMOUNT", "Selecciona un monto de recarga disponible.");
+    }
+    if (commission < 0) {
+      return result(false, "INVALID_RECHARGE_FEE", "El importe de la recarga no puede ser negativo.");
+    }
+    return result(true, null, "", {
+      amount: baseAmount,
+      fee: commission,
+      total: roundMoney(baseAmount + commission)
+    });
+  };
+
+  const canViewUserRecord = ({ isAdmin = false, currentUserId, recordUserId }) => Boolean(isAdmin) || (Boolean(currentUserId) && currentUserId === recordUserId);
+
   const validateCredit = ({ active, limit, currentDebt, charge, administratorOverride = false }) => {
     if (Number(active) !== 1) return result(false, "INACTIVE_CUSTOMER", "El cliente está inactivo.");
     const creditLimit = roundMoney(limit);
@@ -201,6 +221,9 @@
   };
 
   globalThis.PdvBusinessRules = Object.freeze({
+    RECHARGE_AMOUNTS,
+    calculateRecharge,
+    canViewUserRecord,
     RULES_VERSION,
     MONEY_EPSILON,
     INVENTORY_EPSILON,

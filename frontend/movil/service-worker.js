@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_VERSION = "pdv-gardenias-v15";
+const CACHE_VERSION = "pdv-gardenias-v16";
 const APP_SHELL = [
   "./",
   "./login.html",
@@ -22,12 +22,12 @@ const APP_SHELL = [
   "./reportes.html",
   "./usuarios.html",
   "./config-terminal.html",
-  "./styles.css?v=13",
+  "./styles.css?v=14",
   "./db.js?v=11",
   "./auth.js?v=11",
-  "./business-rules.js?v=7",
+  "./business-rules.js?v=8",
   "./app.js?v=13",
-  "./modules.js?v=15",
+  "./modules.js?v=16",
   "./manifest.webmanifest",
   "./icons/icon-180.png",
   "./icons/icon-192.jpg",

@@ -261,6 +261,10 @@ body.dialog-open { overflow: hidden; }
 .ticket-line:last-child { border-bottom: 0; }
 .total-line { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 12px; padding-top: 14px; border-top: 2px solid var(--line); }
 .total-line strong { font-size: 1.55rem; color: var(--green); }
+.recharge-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.recharge-button { display: grid; min-height: 66px; place-content: center; gap: 3px; padding: 9px 5px; border: 1px solid var(--line); border-radius: 15px; background: #0c110e; color: var(--text); text-align: center; cursor: pointer; }
+.recharge-button strong { color: var(--green); font-size: 1rem; }
+.recharge-button span { color: var(--muted); font-size: .66rem; }
 
 .bar-chart { display: flex; height: 150px; align-items: flex-end; gap: 9px; padding-top: 12px; }
 .bar { display: grid; min-width: 0; flex: 1; place-items: end center; gap: 6px; color: var(--muted); font-size: .65rem; }

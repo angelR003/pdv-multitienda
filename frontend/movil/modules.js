@@ -25,6 +25,9 @@
   const params = new URLSearchParams(location.search);
   const uid = () => database.uuid();
   const realOptions = { isDemo: false, syncStatus: "pending" };
+  const RECHARGE_FEE = 2;
+  const rechargeAmounts = rules?.RECHARGE_AMOUNTS || [10, 20, 30, 50, 80, 100, 200, 300, 500];
+  const isRechargeLine = line => line?.type === "recharge";
 
   const hero = (eyebrow, title, description) => `<div class="hero"><p class="eyebrow">${escapeHtml(eyebrow)}</p><h1>${escapeHtml(title)}</h1><p class="muted">${escapeHtml(description)}</p></div>`;
   const empty = message => `<div class="empty-state"><strong>Sin registros</strong><span>${escapeHtml(message)}</span></div>`;
@@ -200,16 +203,21 @@
 
   async function cashSummary() {
     const [sales, movements] = await Promise.all([database.list("ventas"), database.list("movimientos_caja")]);
-    const storeSales = sales.filter(record => record.tienda_id === state.context.store.id && record.estado !== "cancelada");
-    const storeMoves = movements.filter(record => record.tienda_id === state.context.store.id);
+    const belongsToCurrentCut = record => rules.canViewUserRecord({ isAdmin: state.access.isAdmin, currentUserId: state.context.user.id, recordUserId: record.usuario_id });
+    const storeSales = sales.filter(record => record.tienda_id === state.context.store.id && record.estado !== "cancelada" && belongsToCurrentCut(record));
+    const storeMoves = movements.filter(record => record.tienda_id === state.context.store.id && belongsToCurrentCut(record));
     const salesTotal = storeSales.reduce((sum, record) => sum + Number(record.total || 0), 0);
     const movementsTotal = storeMoves.reduce((sum, record) => sum + (record.tipo_movimiento === "retiro" ? -1 : 1) * Number(record.monto || 0), 0);
     return { salesTotal, movementsTotal, expected: salesTotal + movementsTotal };
   }
 
   async function renderCuts() {
-    const [summary, cuts] = await Promise.all([cashSummary(), database.list("cortes_caja")]);
-    return `${hero("Arqueo local", "Cortes", "Compara el efectivo contado con el saldo esperado.")}<div class="stats"><div class="stat"><span>Ventas</span><strong>${money(summary.salesTotal)}</strong></div><div class="stat"><span>Esperado</span><strong>${money(summary.expected)}</strong></div></div><form class="card stack" data-action="save-cut">${field("Efectivo contado", "contado", { type: "number", step: "0.01", min: 0 })}<button class="button full">Registrar corte</button></form><section class="card"><div class="list">${cuts.length ? cuts.slice().reverse().map(cut => `<div class="list-item"><span class="list-item-main"><strong>Corte ${escapeHtml(cut.folio || cut.id.slice(0, 8))}</strong><span>${dateTime(cut.fecha_corte)} · Diferencia ${money(cut.diferencia)}</span></span><span class="list-item-value">${money(cut.efectivo_contado)}</span></div>`).join("") : empty("Todavía no hay cortes.")}</div></section>`;
+    const [summary, allCuts] = await Promise.all([cashSummary(), database.list("cortes_caja")]);
+    const cuts = allCuts.filter(cut => rules.canViewUserRecord({ isAdmin: state.access.isAdmin, currentUserId: state.context.user.id, recordUserId: cut.usuario_id }));
+    const userNames = new Map(state.context.users.map(user => [user.id, user.nombre]));
+    const storeNames = new Map(state.context.stores.map(store => [store.id, store.nombre]));
+    const scopeDescription = state.access.isAdmin ? "Puedes revisar los cortes de todos los usuarios y sucursales." : "Solo se muestran tus ventas, movimientos y cortes.";
+    return `${hero("Arqueo local", "Cortes", scopeDescription)}<div class="stats"><div class="stat"><span>Ventas</span><strong>${money(summary.salesTotal)}</strong></div><div class="stat"><span>Esperado</span><strong>${money(summary.expected)}</strong></div></div><form class="card stack" data-action="save-cut">${field("Efectivo contado", "contado", { type: "number", step: "0.01", min: 0 })}<button class="button full">Registrar corte</button></form><section class="card"><div class="list">${cuts.length ? cuts.slice().reverse().map(cut => `<div class="list-item"><span class="list-item-main"><strong>Corte ${escapeHtml(cut.folio || cut.id.slice(0, 8))}</strong><span>${dateTime(cut.fecha_corte)} · ${escapeHtml(userNames.get(cut.usuario_id) || "Usuario")} · ${escapeHtml(storeNames.get(cut.tienda_id) || "Sucursal")} · Diferencia ${money(cut.diferencia)}</span></span><span class="list-item-value">${money(cut.efectivo_contado)}</span></div>`).join("") : empty(state.access.isAdmin ? "Todavía no hay cortes." : "Todavía no has registrado cortes.")}</div></section>`;
   }
 
   async function renderAdjustments() {
@@ -218,21 +226,22 @@
   }
 
   async function renderHistory() {
-    const [sales, users, details] = await Promise.all([database.list("ventas"), database.list("usuarios"), database.list("venta_detalles")]);
+    const [sales, users, details, services] = await Promise.all([database.list("ventas"), database.list("usuarios"), database.list("venta_detalles"), database.list("venta_servicios")]);
     const userNames = new Map(users.map(user => [user.id, user.nombre]));
-    return `${hero("Ventas guardadas", "Historial", "Abre una venta para revisar productos o devolverla.")}<section class="list">${sales.length ? sales.slice().reverse().map(sale => { const count = details.filter(detail => detail.venta_id === sale.id).length; return `<a class="list-item actionable" href="venta-detalle.html?id=${encodeURIComponent(sale.id)}"><span class="list-item-main"><strong>${escapeHtml(sale.folio)}</strong><span>${dateTime(sale.fecha_venta)} · ${escapeHtml(userNames.get(sale.usuario_id) || "Usuario")} · ${count} renglones</span></span><span class="list-item-value">${money(sale.total)}<span>${escapeHtml(sale.metodo_pago || "Pago")} · Ver →</span></span></a>`; }).join("") : empty("Las ventas cobradas aparecerán aquí.")}</section>`;
+    return `${hero("Ventas guardadas", "Historial", "Abre una venta para revisar productos o devolverla.")}<section class="list">${sales.length ? sales.slice().reverse().map(sale => { const count = details.filter(detail => detail.venta_id === sale.id).length + services.filter(service => service.venta_id === sale.id).length; return `<a class="list-item actionable" href="venta-detalle.html?id=${encodeURIComponent(sale.id)}"><span class="list-item-main"><strong>${escapeHtml(sale.folio)}</strong><span>${dateTime(sale.fecha_venta)} · ${escapeHtml(userNames.get(sale.usuario_id) || "Usuario")} · ${count} renglones</span></span><span class="list-item-value">${money(sale.total)}<span>${escapeHtml(sale.metodo_pago || "Pago")} · Ver →</span></span></a>`; }).join("") : empty("Las ventas cobradas aparecerán aquí.")}</section>`;
   }
 
   async function renderSaleDetail() {
     const sales = await database.list("ventas");
     const sale = sales.find(record => record.id === params.get("id")) || sales.at(-1);
     if (!sale) return `${hero("Detalle", "Venta", "No se encontró el registro.")}${empty("Regresa al historial.")}`;
-    const [details, products, returns, returnDetails] = await Promise.all([database.list("venta_detalles"), database.list("productos"), database.list("devoluciones"), database.list("devolucion_detalles")]);
+    const [details, products, services, returns, returnDetails] = await Promise.all([database.list("venta_detalles"), database.list("productos"), database.list("venta_servicios"), database.list("devoluciones"), database.list("devolucion_detalles")]);
     const map = new Map(products.map(product => [product.id, product]));
     const rows = details.filter(detail => detail.venta_id === sale.id);
+    const serviceRows = services.filter(service => service.venta_id === sale.id);
     const saleReturns = returns.filter(record => record.venta_id === sale.id);
     const returned = returnDetails.filter(detail => saleReturns.some(record => record.id === detail.devolucion_id)).reduce((sum, detail) => sum + Number(detail.subtotal || 0), 0);
-    return `${hero(sale.estado || "Completada", sale.folio, dateTime(sale.fecha_venta))}<section class="card"><div class="list">${rows.map(detail => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(map.get(detail.producto_id)?.nombre || detail.descripcion || "Producto")}</strong><span>${number(detail.cantidad)} × ${money(detail.precio_unitario)}</span></span><span class="list-item-value">${money(detail.subtotal)}</span></div>`).join("")}</div><div class="total-line"><span>Total</span><strong>${money(sale.total)}</strong></div></section><section class="card stack"><p class="muted">Devuelto anteriormente: ${money(returned)}</p><button class="button danger full" data-return-sale="${sale.id}" ${rows.length ? "" : "disabled"}>Devolver remanente completo</button></section>`;
+    return `${hero(sale.estado || "Completada", sale.folio, dateTime(sale.fecha_venta))}<section class="card"><div class="list">${rows.map(detail => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(map.get(detail.producto_id)?.nombre || detail.descripcion || "Producto")}</strong><span>${number(detail.cantidad)} × ${money(detail.precio_unitario)}</span></span><span class="list-item-value">${money(detail.subtotal)}</span></div>`).join("")}${serviceRows.map(service => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(service.descripcion || "Recarga")}</strong><span>Recarga ${money(service.monto_base)} + importe ${money(service.comision)}</span></span><span class="list-item-value">${money(service.total_cobrado)}</span></div>`).join("")}</div><div class="total-line"><span>Total cobrado</span><strong>${money(sale.total)}</strong></div></section><section class="card stack"><p class="muted">Devuelto anteriormente: ${money(returned)}</p><button class="button danger full" data-return-sale="${sale.id}" ${rows.length ? "" : "disabled"}>Devolver remanente completo</button></section>`;
   }
 
   async function renderContainers() {
@@ -292,15 +301,22 @@
 
   async function renderSales() {
     const [products, promotions, inventory, clients] = await Promise.all([database.list("productos"), database.list("promociones"), inventoryMap(state.context.store.id), clientBalances()]);
-    state.cart = state.cart.filter(line => products.some(product => product.id === line.productId));
-    const lines = state.cart.map(line => {
+    state.cart = state.cart.filter(line => isRechargeLine(line) ? rechargeAmounts.includes(Number(line.amount)) : products.some(product => product.id === line.productId));
+    const productLines = state.cart.filter(line => !isRechargeLine(line)).map(line => {
       const product = products.find(record => record.id === line.productId);
       const price = Number(product?.precio_global || 0);
       const promo = rules.calculatePromotion(Number(line.quantity), price, promotions.filter(record => record.producto_id === line.productId && record.activa !== 0), product);
       return { ...line, product, unitPrice: price, subtotal: promo.subtotal };
     });
-    const total = rules.roundMoney(lines.reduce((sum, line) => sum + line.subtotal, 0));
-    return `${hero("Venta local", "Nueva venta", "Agrega productos disponibles y registra el cobro en este dispositivo.")}<section class="card stack">${searchField("sales", "Escanea o escribe el código", { autofocus: true })}<div class="card-head"><h2>Productos disponibles</h2>${badge(`${products.length}`)}</div><div class="list compact">${products.filter(product => product.activo !== 0).map(product => { const stock = inventory.get(product.id)?.cantidad_actual || 0; return `<button class="list-item actionable list-button" ${searchableAttributes("sales", product)} data-add-product="${product.id}" ${stock <= 0 ? "disabled" : ""}><span class="list-item-main"><strong>${escapeHtml(product.nombre)}</strong><span>${escapeHtml(product.codigo_barras || "Sin código")} · Stock ${number(stock)}${product.is_demo ? " · Muestra inicial" : ""}</span></span><span class="list-item-value">${money(product.precio_global)}<span>Agregar +</span></span></button>`; }).join("")}</div></section><section class="card"><div class="card-head"><h2>Ticket</h2>${badge(`${lines.length} renglones`)}</div><div class="list">${lines.length ? lines.map(line => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(line.product.nombre)}</strong><span>${number(line.quantity)} × ${money(line.unitPrice)}</span></span><span class="list-item-value">${money(line.subtotal)}<button class="link-button" data-remove-product="${line.productId}">Quitar</button></span></div>`).join("") : empty("Busca o escanea un producto para agregarlo.")}</div><div class="total-line"><span>Total</span><strong>${money(total)}</strong></div></section>${lines.length ? `<form class="card stack" data-action="checkout">${select("Forma de pago", "metodo", [{ value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" }, { value: "fiado", label: "Fiado" }])}${clients.length ? select("Cliente para fiado", "cliente_id", [{ value: "", label: "Seleccionar solo si es fiado" }, ...clients.map(client => ({ value: client.id, label: `${client.nombre} · saldo ${money(client.saldo)}` }))]) : ""}<button class="button full">Cobrar ${money(total)}</button></form>` : ""}`;
+    const rechargeLines = state.cart.filter(isRechargeLine).map(line => ({ ...line, ...rules.calculateRecharge(line.amount, RECHARGE_FEE) }));
+    const productSubtotal = rules.roundMoney(productLines.reduce((sum, line) => sum + line.subtotal, 0));
+    const rechargeBase = rules.roundMoney(rechargeLines.reduce((sum, line) => sum + line.amount, 0));
+    const rechargeFees = rules.roundMoney(rechargeLines.reduce((sum, line) => sum + line.fee, 0));
+    const rechargeTotal = rules.roundMoney(rechargeLines.reduce((sum, line) => sum + line.total, 0));
+    const total = rules.roundMoney(productSubtotal + rechargeTotal);
+    const lineCount = productLines.length + rechargeLines.length;
+    const confirmationDialog = lineCount ? `<div class="dialog-backdrop" id="dlg-confirm-sale" aria-hidden="true"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-sale-title"><div class="dialog-head"><div><p class="eyebrow">Confirmar venta</p><h2 id="confirm-sale-title">Total a cobrar</h2></div><button type="button" class="icon-button dialog-close" data-close aria-label="Cerrar diálogo">×</button></div><div class="stack"><div class="ticket-line"><span>Productos</span><strong>${money(productSubtotal)}</strong></div>${rechargeLines.length ? `<div class="ticket-line"><span>Recargas</span><strong>${money(rechargeBase)}</strong></div><div class="ticket-line"><span>Importe de recargas (${rechargeLines.length} × ${money(RECHARGE_FEE)})</span><strong>${money(rechargeFees)}</strong></div>` : ""}<div class="total-line"><span>Monto total</span><strong>${money(total)}</strong></div><p class="muted small">Verifica el monto antes de registrar el cobro.</p><form class="stack" data-action="checkout"><input type="hidden" name="metodo"><input type="hidden" name="cliente_id"><button class="button full">Confirmar y cobrar ${money(total)}</button><button type="button" class="button secondary full" data-close>Regresar</button></form></div></section></div>` : "";
+    return `${hero("Venta local", "Nueva venta", "Agrega productos o recargas y registra el cobro en este dispositivo.")}<section class="card stack">${searchField("sales", "Escanea o escribe el código", { autofocus: true })}<div class="card-head"><h2>Productos disponibles</h2>${badge(`${products.length}`)}</div><div class="list compact">${products.filter(product => product.activo !== 0).map(product => { const stock = inventory.get(product.id)?.cantidad_actual || 0; return `<button class="list-item actionable list-button" ${searchableAttributes("sales", product)} data-add-product="${product.id}" ${stock <= 0 ? "disabled" : ""}><span class="list-item-main"><strong>${escapeHtml(product.nombre)}</strong><span>${escapeHtml(product.codigo_barras || "Sin código")} · Stock ${number(stock)}${product.is_demo ? " · Muestra inicial" : ""}</span></span><span class="list-item-value">${money(product.precio_global)}<span>Agregar +</span></span></button>`; }).join("")}</div></section><section class="card stack"><div class="card-head"><div><h2>Recargas</h2><p class="muted small">Cada recarga cobra ${money(RECHARGE_FEE)} de importe.</p></div>${badge(`${rechargeLines.length} agregadas`)}</div><div class="recharge-grid">${rechargeAmounts.map(amount => `<button type="button" class="recharge-button" data-add-recharge="${amount}"><strong>${money(amount)}</strong><span>Cobrar ${money(amount + RECHARGE_FEE)}</span></button>`).join("")}</div></section><section class="card"><div class="card-head"><h2>Ticket</h2>${badge(`${lineCount} renglones`)}</div><div class="list">${lineCount ? `${productLines.map(line => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(line.product.nombre)}</strong><span>${number(line.quantity)} × ${money(line.unitPrice)}</span></span><span class="list-item-value">${money(line.subtotal)}<button class="link-button" data-remove-product="${line.productId}">Quitar</button></span></div>`).join("")}${rechargeLines.map(line => `<div class="list-item"><span class="list-item-main"><strong>Recarga ${money(line.amount)}</strong><span>Importe ${money(line.fee)} incluido</span></span><span class="list-item-value">${money(line.total)}<button class="link-button" data-remove-recharge="${line.cartId}">Quitar</button></span></div>`).join("")}` : empty("Busca un producto o agrega una recarga.")}</div>${rechargeLines.length ? `<div class="ticket-line"><span>Importes de recarga</span><strong>${money(rechargeFees)}</strong></div>` : ""}<div class="total-line"><span>Total a cobrar</span><strong>${money(total)}</strong></div></section>${lineCount ? `<form class="card stack" data-action="prepare-checkout">${select("Forma de pago", "metodo", [{ value: "efectivo", label: "Efectivo" }, { value: "transferencia", label: "Transferencia" }, { value: "fiado", label: "Fiado" }])}${clients.length ? select("Cliente para fiado", "cliente_id", [{ value: "", label: "Seleccionar solo si es fiado" }, ...clients.map(client => ({ value: client.id, label: `${client.nombre} · saldo ${money(client.saldo)}` }))]) : ""}<button class="button full">Revisar cobro ${money(total)}</button></form>` : ""}${confirmationDialog}`;
   }
 
   const renderers = {
@@ -335,6 +351,19 @@
   async function handleSubmit(form) {
     const data = values(form);
     assertWriteAccess(form.dataset.action);
+    if (form.dataset.action === "prepare-checkout") {
+      if (data.metodo === "fiado" && !data.cliente_id) throw new Error("Selecciona un cliente para la venta fiada.");
+      const dialog = document.querySelector("#dlg-confirm-sale");
+      const checkoutForm = dialog?.querySelector('form[data-action="checkout"]');
+      if (!dialog || !checkoutForm) throw new Error("No se pudo preparar la confirmación de la venta.");
+      checkoutForm.elements.metodo.value = data.metodo;
+      checkoutForm.elements.cliente_id.value = data.cliente_id || "";
+      dialog.classList.add("open");
+      dialog.setAttribute("aria-hidden", "false");
+      document.body.classList.add("dialog-open");
+      checkoutForm.querySelector("button")?.focus();
+      return;
+    }
     const now = today();
     if (form.dataset.action === "save-product") {
       const id = data.id || uid();
@@ -430,8 +459,8 @@
     const operations = [];
     const inventoryUpdates = new Map();
     const saleId = uid();
-    let total = 0;
-    for (const line of state.cart) {
+    let productSubtotal = 0;
+    for (const line of state.cart.filter(item => !isRechargeLine(item))) {
       const product = products.find(record => record.id === line.productId);
       const impact = rules.resolveInventoryImpact(product, Number(line.quantity));
       if (!impact.ok) throw new Error(impact.message);
@@ -439,11 +468,21 @@
       const availability = rules.validateInventoryAvailability(Number(inventory?.cantidad_actual || 0), impact.physicalQuantity);
       if (!availability.ok) throw new Error(`${product.nombre}: ${availability.message}`);
       const promo = rules.calculatePromotion(Number(line.quantity), Number(product.precio_global), promotions.filter(record => record.producto_id === product.id && record.activa !== 0), product);
-      total += promo.subtotal;
+      productSubtotal += promo.subtotal;
       operations.push({ store: "venta_detalles", payload: { venta_id: saleId, producto_id: product.id, cantidad: Number(line.quantity), precio_unitario: Number(product.precio_global), subtotal: promo.subtotal, promocion_id: promo.promotionId }, options: realOptions });
       inventoryUpdates.set(impact.physicalProductId, { ...inventory, cantidad_actual: Number(inventory.cantidad_actual) - impact.physicalQuantity, ultima_actualizacion: today() });
     }
-    total = rules.roundMoney(total);
+    productSubtotal = rules.roundMoney(productSubtotal);
+    let rechargeTotal = 0;
+    for (const line of state.cart.filter(isRechargeLine)) {
+      const recharge = rules.calculateRecharge(line.amount, RECHARGE_FEE);
+      if (!recharge.ok) throw new Error(recharge.message);
+      rechargeTotal += recharge.total;
+      operations.push({ store: "venta_servicios", payload: { venta_id: saleId, tipo: "recarga", descripcion: `Recarga ${money(recharge.amount)}`, monto_base: recharge.amount, comision: recharge.fee, total_cobrado: recharge.total, fecha_registro: today() }, options: realOptions });
+    }
+    rechargeTotal = rules.roundMoney(rechargeTotal);
+    const total = rules.roundMoney(productSubtotal + rechargeTotal);
+    if (total <= 0) throw new Error("La venta no tiene un monto válido para cobrar.");
     let client = null;
     if (data.metodo === "fiado") {
       client = clients.find(record => record.id === data.cliente_id);
@@ -452,7 +491,7 @@
       if (!credit.ok) throw new Error(credit.message);
       operations.push({ store: "fiados", payload: { cliente_id: client.id, usuario_id: state.context.user.id, tienda_id: state.context.store.id, venta_id: saleId, monto: total, saldo: total, fecha_fiado: today(), estado: "pendiente" }, options: realOptions });
     }
-    operations.unshift({ store: "ventas", payload: { id: saleId, folio: `V-${Date.now().toString().slice(-6)}`, tienda_id: state.context.store.id, usuario_id: state.context.user.id, cliente_id: client?.id || null, subtotal: total, total, metodo_pago: data.metodo, estado: "completada", fecha_venta: today() }, options: realOptions });
+    operations.unshift({ store: "ventas", payload: { id: saleId, folio: `V-${Date.now().toString().slice(-6)}`, tienda_id: state.context.store.id, usuario_id: state.context.user.id, cliente_id: client?.id || null, subtotal: total, total, productos_subtotal: productSubtotal, servicios_total: rechargeTotal, metodo_pago: data.metodo, estado: "completada", fecha_venta: today() }, options: realOptions });
     inventoryUpdates.forEach(inventory => operations.push({ store: "inventario", payload: inventory, options: realOptions }));
     operations.push({ store: "venta_pagos", payload: { venta_id: saleId, cliente_fiado_id: client?.id || null, metodo: data.metodo, monto: total, fecha_registro: today() }, options: realOptions });
     await database.batch(operations);
@@ -569,6 +608,15 @@
     render().catch(console.error);
   };
 
+  const addRechargeToCart = amount => {
+    assertWriteAccess("checkout");
+    const recharge = rules.calculateRecharge(amount, RECHARGE_FEE);
+    if (!recharge.ok) throw new Error(recharge.message);
+    state.cart.push({ type: "recharge", cartId: uid(), amount: recharge.amount });
+    sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart));
+    render().catch(console.error);
+  };
+
   document.addEventListener("input", event => {
     const input = event.target.closest("[data-search-scope]");
     if (input) filterScope(input.dataset.searchScope, input.value);
@@ -610,8 +658,15 @@
       try { addProductToCart(add.dataset.addProduct); }
       catch (error) { toast(error.message, "error"); }
     }
+    const recharge = event.target.closest("[data-add-recharge]");
+    if (recharge) {
+      try { addRechargeToCart(Number(recharge.dataset.addRecharge)); }
+      catch (error) { toast(error.message, "error"); }
+    }
     const remove = event.target.closest("[data-remove-product]");
     if (remove) { try { assertWriteAccess("checkout"); } catch (error) { toast(error.message, "error"); return; } state.cart = state.cart.filter(item => item.productId !== remove.dataset.removeProduct); sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart)); render().catch(console.error); }
+    const removeRecharge = event.target.closest("[data-remove-recharge]");
+    if (removeRecharge) { try { assertWriteAccess("checkout"); } catch (error) { toast(error.message, "error"); return; } state.cart = state.cart.filter(item => item.cartId !== removeRecharge.dataset.removeRecharge); sessionStorage.setItem("pdv-cart", JSON.stringify(state.cart)); render().catch(console.error); }
     const product = event.target.closest("[data-edit-product]");
     if (product) editProduct(product.dataset.editProduct).catch(error => toast(error.message, "error"));
     const stock = event.target.closest("[data-edit-stock]");
