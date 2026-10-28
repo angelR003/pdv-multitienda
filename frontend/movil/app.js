@@ -63,8 +63,8 @@
     importes: ["Importes", "Envases retornables"], fiados: ["Fiados", "Clientes y saldos"],
     promociones: ["Promociones", "Ofertas por cantidad"], traspasos: ["Traspasos", "Entre sucursales"],
     reportes: ["Reportes", "Resumen operativo"], usuarios: ["Usuarios", "Equipo y accesos"],
-    "venta-detalle": ["Detalle de venta", "Folio V-1048"],
-    "traspaso-detalle": ["Detalle de traspaso", "Folio T-0184"]
+    "venta-detalle": ["Detalle de venta", "Venta guardada"],
+    "traspaso-detalle": ["Detalle de traspaso", "Traspaso guardado"]
   };
 
   const icons = {

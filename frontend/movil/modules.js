@@ -248,8 +248,12 @@
     const rows = details.filter(detail => detail.venta_id === sale.id);
     const serviceRows = services.filter(service => service.venta_id === sale.id);
     const saleReturns = returns.filter(record => record.venta_id === sale.id);
-    const returned = returnDetails.filter(detail => saleReturns.some(record => record.id === detail.devolucion_id)).reduce((sum, detail) => sum + Number(detail.subtotal || 0), 0);
-    return `${hero(sale.estado || "Completada", sale.folio, dateTime(sale.fecha_venta))}<section class="card"><div class="list">${rows.map(detail => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(map.get(detail.producto_id)?.nombre || detail.descripcion || "Producto")}</strong><span>${number(detail.cantidad)} × ${money(detail.precio_unitario)}</span></span><span class="list-item-value">${money(detail.subtotal)}</span></div>`).join("")}${serviceRows.map(service => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(service.descripcion || "Recarga")}</strong><span>Recarga ${money(service.monto_base)} + importe ${money(service.comision)}</span></span><span class="list-item-value">${money(service.total_cobrado)}</span></div>`).join("")}</div><div class="total-line"><span>Total cobrado</span><strong>${money(sale.total)}</strong></div></section><section class="card stack"><p class="muted">Devuelto anteriormente: ${money(returned)}</p><button class="button danger full" data-return-sale="${sale.id}" ${rows.length ? "" : "disabled"}>Devolver remanente completo</button></section>`;
+    const returnedRows = returnDetails.filter(detail => saleReturns.some(record => record.id === detail.devolucion_id));
+    const returned = returnedRows.reduce((sum, detail) => sum + Number(detail.subtotal || 0), 0);
+    const returnedByProduct = new Map();
+    returnedRows.forEach(detail => returnedByProduct.set(detail.producto_id, (returnedByProduct.get(detail.producto_id) || 0) + Number(detail.cantidad || 0)));
+    const returnableQuantity = rows.reduce((sum, detail) => sum + Math.max(0, Number(detail.cantidad || 0) - Number(returnedByProduct.get(detail.producto_id) || 0)), 0);
+    return `${hero(sale.estado || "Completada", sale.folio, dateTime(sale.fecha_venta))}<section class="card"><div class="list">${rows.map(detail => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(map.get(detail.producto_id)?.nombre || detail.descripcion || "Producto")}</strong><span>${number(detail.cantidad)} × ${money(detail.precio_unitario)}</span></span><span class="list-item-value">${money(detail.subtotal)}</span></div>`).join("")}${serviceRows.map(service => `<div class="list-item"><span class="list-item-main"><strong>${escapeHtml(service.descripcion || "Recarga")}</strong><span>Recarga ${money(service.monto_base)} + importe ${money(service.comision)}</span></span><span class="list-item-value">${money(service.total_cobrado)}</span></div>`).join("")}</div><div class="total-line"><span>Total cobrado</span><strong>${money(sale.total)}</strong></div></section><section class="card stack"><p class="muted">Productos devueltos anteriormente: ${money(returned)}</p>${serviceRows.length ? `<p class="muted small">Las recargas procesadas y su importe no admiten devolución.</p>` : ""}<button class="button danger full" data-return-sale="${sale.id}" ${returnableQuantity > 0 ? "" : "disabled"}>${returnableQuantity > 0 ? "Devolver productos pendientes" : "Productos devueltos por completo"}</button></section>`;
   }
 
   async function renderContainers() {
@@ -563,7 +567,7 @@
 
   async function returnSale(id) {
     assertWriteAccess("return-sale");
-    if (!confirm("¿Devolver todo el remanente de esta venta y restaurar el inventario?")) return;
+    if (!confirm("¿Devolver todos los productos pendientes de esta venta y restaurar el inventario? Las recargas procesadas no se devolverán.")) return;
     const [sale, details, returns, returnDetails, products] = await Promise.all([database.get("ventas", id), database.list("venta_detalles"), database.list("devoluciones"), database.list("devolucion_detalles"), productMap()]);
     const saleRows = details.filter(detail => detail.venta_id === id);
     const saleReturnIds = returns.filter(record => record.venta_id === id).map(record => record.id);
@@ -589,7 +593,7 @@
     operations[0].payload.total = rules.roundMoney(total);
     inventoryUpdates.forEach(inventory => operations.push({ store: "inventario", payload: inventory, options: realOptions }));
     await database.batch(operations);
-    toast("Devolución guardada e inventario restaurado.");
+    toast("Productos devueltos e inventario restaurado.");
     await render();
   }
 
